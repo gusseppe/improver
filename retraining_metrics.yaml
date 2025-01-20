@@ -1,0 +1,10 @@
+difference_score_averages:
+  score_average: 0.030833333333333268
+model_new:
+  score_average: 0.75
+  score_new_data: 0.5916666666666667
+  score_reference_data: 0.9083333333333333
+model_reference:
+  score_average: 0.7191666666666667
+  score_new_data: 0.525
+  score_reference_data: 0.9133333333333333
