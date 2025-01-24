@@ -1,0 +1,7 @@
+model_new:
+  score_new_data: 0.8833333333333333
+  score_reference_data: 0.9016666666666666
+model_reference:
+  score_average: 0.8525
+  score_new_data: 0.8
+  score_reference_data: 0.905

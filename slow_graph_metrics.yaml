@@ -1,0 +1,3 @@
+model_new_score:
+  on_new_data: 0.8333333333333334
+  on_old_data: 0.8966666666666666

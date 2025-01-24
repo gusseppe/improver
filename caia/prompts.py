@@ -240,115 +240,217 @@ def prompt_measure_model_retraining_speed() -> ChatPromptTemplate:
     return final_prompt
 
 
+def prompt_stats_data() -> ChatPromptTemplate:
+    examples = [
+        {
+            "input": """
+            old:
+              description:
+                NUMERICAL_FEATURES: [Age, Income]
+                CATEGORICAL_FEATURES: [Home_Ownership]
+                COLUMN_VALUES:
+                  Home_Ownership: [0: Rent, 1: Own]
+              x_train: data/ref/X.csv
+              y_train: data/ref/y.csv
+            new:
+              description:
+                NUMERICAL_FEATURES: [Age, Income]
+                CATEGORICAL_FEATURES: [Home_Ownership]
+              x_train: data/new/X.csv
+              y_train: data/new/y.csv
+            """,
+            "output": """
+            stats_code: |
+                import pandas as pd
+                import numpy as np
+                import yaml
+
+                def calculate_drift(ref_stat, new_stat):
+                    return round((new_stat - ref_stat) / ref_stat, 3)
+
+                def analyze_dataset(X_path, y_path, description):
+                    X = pd.read_csv(X_path)
+                    y = pd.read_csv(y_path).squeeze()
+
+                    stats = {
+                        'class_distribution': y.value_counts(normalize=True).round(3).to_dict(),
+                        'numerical': {feat: {
+                            'mean': round(X[feat].mean(), 2),
+                            'std': round(X[feat].std(), 2),
+                            'min': X[feat].min(),
+                            'max': X[feat].max()
+                        } for feat in description['NUMERICAL_FEATURES']},
+                        'categorical': {feat: {
+                            'distribution': X[feat].replace(
+                                description.get('COLUMN_VALUES', {}).get(feat, {})
+                            ).value_counts(normalize=True).round(3).to_dict()
+                        } for feat in description['CATEGORICAL_FEATURES']},
+                        'missing': X.isna().mean().round(3).to_dict()
+                    }
+                    return stats
+
+                # Analyze datasets
+                ref_stats = analyze_dataset("data/ref/X.csv", "data/ref/y.csv", old['description'])
+                new_stats = analyze_dataset("data/new/X.csv", "data/new/y.csv", new['description'])
+
+                # Calculate drift metrics
+                drift_metrics = {
+                    'class_distribution': calculate_drift(
+                        ref_stats['class_distribution'].get(1, 0),
+                        new_stats['class_distribution'].get(1, 0)
+                    ),
+                    'numerical': {
+                        feat: calculate_drift(
+                            ref_stats['numerical'][feat]['mean'],
+                            new_stats['numerical'][feat]['mean']
+                        ) for feat in ref_stats['numerical']
+                    },
+                    'categorical': {
+                        feat: calculate_drift(
+                            ref_stats['categorical'][feat]['distribution'].get(1, 0),
+                            new_stats['categorical'][feat]['distribution'].get(1, 0)
+                        ) for feat in ref_stats['categorical']
+                    }
+                }
+
+                # Save results
+                with open('dataset_stats.yaml', 'w') as f:
+                    yaml.dump({
+                        'old_stats': ref_stats,
+                        'new_stats': new_stats,
+                        'drift_metrics': drift_metrics
+                    }, f)
+            """
+        }
+    ]
+
+    system_prompt = """
+    Generate Python code to analyze and compare two datasets (old and new). The code must:
+    1. Compute statistics for numerical features (mean, std, min, max).
+    2. Analyze distributions for categorical features.
+    3. Calculate missing value percentages.
+    4. Compute drift metrics between datasets.
+    5. Save results in 'dataset_stats.yaml'.
+
+    Response Format:
+
+    stats_code: |
+        [COMPLETE STATS CODE]
+
+    Only provide the YAML-formatted code output. Do not include any other explanation or commentary.
+    """
+
+    system_prompt = textwrap.dedent(system_prompt).strip()
+
+    final_prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        FewShotChatMessagePromptTemplate(
+            example_prompt=ChatPromptTemplate.from_messages([
+                ("human", "{input}"),
+                ("ai", "{output}")
+            ]),
+            examples=examples
+        ),
+        ("human", "{input}")
+    ])
+
+    return final_prompt
+
+
 def prompt_generate_retraining_code() -> ChatPromptTemplate:
     examples = [
         {
             "input": '''
-            reference_training_code: |
+            old_training_code: |
                 import pandas as pd
                 from sklearn.ensemble import RandomForestClassifier
 
-                # load the reference data
+                # load the old data
                 dataset_folder = "datasets/financial"
-                X_train_reference = pd.read_csv(f"{dataset_folder}/X_train_reference.csv")
-                X_test_reference = pd.read_csv(f"{dataset_folder}/X_test_reference.csv")
-                y_train_reference = pd.read_csv(f"{dataset_folder}/y_train_reference.csv").squeeze("columns")
-                y_test_reference = pd.read_csv(f"{dataset_folder}/y_test_reference.csv").squeeze("columns")
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
 
-                model_reference = RandomForestClassifier(random_state=42)
+                model_old = RandomForestClassifier(random_state=42)
 
-                model_reference.fit(X_train_reference, y_train_reference)
+                model_old.fit(X_train_old, y_train_old)
 
                 # Test the model on the initial test set
-                initial_accuracy = model_reference.score(X_test_reference, y_test_reference)
+                initial_accuracy = model_old.score(X_test_old, y_test_old)
 
-                print(f'Model trained and evaluated on the reference distribution: {initial_accuracy}')
-
-            new_data: |
-                X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
-                X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
-                y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
-                y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+                print(f'Model trained and evaluated on the old distribution: {initial_accuracy}')
             ''',
             "output": '''
             new_training_code: |
                 import yaml
                 from sklearn.ensemble import RandomForestClassifier
 
-                metrics = {
-                    'model_reference': {},
-                    'model_new': {},
-                    'difference_score_averages': {}
+                # Initialize metrics dictionaries
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                model_old_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
                 }
 
-                # load the reference data
-                X_train_reference = pd.read_csv(f"{dataset_folder}/X_train_reference.csv")
-                X_test_reference = pd.read_csv(f"{dataset_folder}/X_test_reference.csv")
-                y_train_reference = pd.read_csv(f"{dataset_folder}/y_train_reference.csv").squeeze("columns")
-                y_test_reference = pd.read_csv(f"{dataset_folder}/y_test_reference.csv").squeeze("columns")
+                # load the old data
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
 
-                # Train and evaluate reference model
-                model_reference = RandomForestClassifier(random_state=42)
-                model_reference.fit(X_train_reference, y_train_reference)
+                # Train and evaluate old model
+                model_old = RandomForestClassifier(random_state=42)
+                model_old.fit(X_train_old, y_train_old)
 
-                # Test reference model on reference test set
-                ref_score_reference = model_reference.score(X_test_reference, y_test_reference)
-                print(f'Model trained and evaluated on the reference distribution: {ref_score_reference}')
-                metrics['model_reference']['score_reference_data'] = float(ref_score_reference)
+                # Test old model on old test set
+                old_score_old = model_old.score(X_test_old, y_test_old)
+                print(f'Old model trained and evaluated on the old distribution: {old_score_old}')
+                model_old_score['on_old_data'] = float(old_score_old)
 
-                # Test reference model on new test set
+                # Test old model on new test set
                 X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
                 y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+                old_score_new = model_old.score(X_test_new, y_test_new)
+                print(f'Old model evaluated on the new distribution: {old_score_new}')
+                model_old_score['on_new_data'] = float(old_score_new)
 
-                ref_score_new = model_reference.score(X_test_new, y_test_new)
-                print(f'Reference model evaluated on the new distribution: {ref_score_new}')
-                metrics['model_reference']['score_new_data'] = float(ref_score_new)
-
-                # Calculate average score for reference model
-                ref_score_average = (ref_score_reference + ref_score_new) / 2
-                print(f'Average score of reference model: {ref_score_average}')
-                metrics['model_reference']['score_average'] = float(ref_score_average)
+                # Save old model metrics
+                with open('old_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_old_score': model_old_score}, f)
 
                 print("\\nTraining new model on combined data...")
 
-                # load the new training data
+                # load and combine new training data
                 X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
                 y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
-
-                # Combine datasets
-                X_train = pd.concat([X_train_reference, X_train_new])
-                y_train = pd.concat([y_train_reference, y_train_new])
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
 
                 # Train new model on combined dataset
                 model_new = RandomForestClassifier(random_state=42)
                 model_new.fit(X_train, y_train)
 
-                # Test new model on reference test set
-                new_score_reference = model_new.score(X_test_reference, y_test_reference)
-                print(f'New model evaluated on reference distribution: {new_score_reference}')
-                metrics['model_new']['score_reference_data'] = float(new_score_reference)
+                # Test new model on old test set
+                new_score_old = model_new.score(X_test_old, y_test_old)
+                print(f'New model trained and evaluated on old distribution: {new_score_old}')
+                model_new_score['on_old_data'] = float(new_score_old)
 
                 # Test new model on new test set
                 new_score_new = model_new.score(X_test_new, y_test_new)
                 print(f'New model evaluated on new distribution: {new_score_new}')
-                metrics['model_new']['score_new_data'] = float(new_score_new)
+                model_new_score['on_new_data'] = float(new_score_new)
 
-                # Calculate average score for new model
-                new_score_average = (new_score_reference + new_score_new) / 2
-                print(f'Average score of new model: {new_score_average}')
-                metrics['model_new']['score_average'] = float(new_score_average)
-
-                # Calculate score difference
-                score_difference = new_score_average - ref_score_average
-                print(f'\\nScore difference: {score_difference}')
-                metrics['difference_score_averages']['score_average'] = float(score_difference)
-                
-                # Save metrics to yaml file
-                with open('retraining_metrics.yaml', 'w') as f:
-                    yaml.dump(metrics, f)
+                # Save new model metrics
+                with open('fast_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             '''
         }
     ]
+
     for example in examples:
         example["input"] = textwrap.dedent(example["input"]).strip()
         example["output"] = textwrap.dedent(example["output"]).strip()
@@ -368,33 +470,28 @@ def prompt_generate_retraining_code() -> ChatPromptTemplate:
     system_prompt = """
     You are an expert machine learning engineer. You have to rewrite the given training code to obtain a retraining code.
 
-    Context: Given a reference training code and new data loading code, generate a new training code that retrains the model.
+    Context: Given a old training code and new data loading code, generate a new training code that retrains the model.
 
     Objective: Create a new training code (new_training_code) that:
-    1. First evaluates the reference model on both distributions:
-       - Trains on reference data
-       - Tests on reference test set
+    1. First evaluates the old model on both distributions:
+       - Trains on old data
+       - Tests on old test set 
        - Tests on new (drifted) test set
-       - Calculates average performance
+       - Saves old model metrics to 'old_metrics.yaml' with structure:
+         model_old_score:
+           on_new_data: [score on new data]
+           on_old_data: [score on old data]
     2. Then trains a new model on combined data and evaluates it:
        - Uses the same ML model and parameters
-       - Trains on combined dataset (reference + new data)
-       - Tests on reference test set
+       - Trains on combined dataset (old + new data)
+       - Tests on old test set
        - Tests on new (drifted) test set
-       - Calculates average performance
+       - Saves new model metrics to 'fast_graph_metrics.yaml' with structure:
+         model_new_score:
+           on_new_data: [score on new data]
+           on_old_data: [score on old data]
     3. Prints performance metrics and data shapes at each step
-    4. Saves the performance metrics to a YAML file named 'retraining_metrics.yaml' using the following structure:
-       model_reference:
-         score_reference_data: [score]
-         score_new_data: [score]
-         score_average: [score]
-       model_new:
-         score_reference_data: [score]
-         score_new_data: [score]
-         score_average: [score]
-       difference_score_averages:
-         score_average: [score]
-    
+            
     Style: Provide clear, well-structured Python code that maintains the same model architecture and parameters.
 
     Response Format: Format your response as YAML output with the following structure:
@@ -513,100 +610,69 @@ def prompt_distill_memories() -> ChatPromptTemplate:
     examples = [
         {
             "input": """
-            criticality_analysis: |
-                arguments_for_high_criticality:
-                  - Significant drift in Income, Loan Term, Interest Rate features
-                  - SHAP values changes in key features
-                  - Interest Rate distribution changes significant
-                arguments_for_low_criticality:
-                  - Age and Credit Score features stable
-                  - Loan Amount distribution unchanged
-                criticality_score:
-                  score: 4
-                  reason: "High-concern issues requiring prompt attention"
-
             execution_output: |
-                Model trained and evaluated on the reference distribution: 0.913
-                Reference model evaluated on the new distribution: 0.550
-                Average score of reference model: 0.732
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
                 
                 Training new model on combined data...
-                New model evaluated on reference distribution: 0.907
-                New model evaluated on new distribution: 0.533
-                Average score of new model: 0.720
-                
-                Score difference: -0.012
-
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
             model_code: |
                 from sklearn.ensemble import RandomForestClassifier
                 model = RandomForestClassifier(random_state=42)
                 model.fit(X_train, y_train)
-
-            improvement_history: |
-                - change: "Basic RandomForest implementation"
-                  outcome: "needs improvement"
-                  accuracy_delta: -0.012
             """,
             "output": """
             insights:
-              performance_gaps:
-                - High performance on reference data (0.913) but poor on new data (0.550)
-                - Model showing significant generalization issues
-                - Performance degradation of 36.3% on new distribution
-                - Combined training not helping generalization (-0.012 delta)
+              performance_analysis:
+                old_model:
+                  - Strong baseline on old distribution (0.913)
+                  - Significant drop on new distribution (0.717)
+                  - Performance gap of 19.6% between distributions
+                new_model:
+                  - Maintained strong old distribution performance (0.907)
+                  - Improved new distribution handling (0.800)
+                  - Reduced gap to 10.7% between distributions
+                key_metrics:
+                  - Improvement of 8.3% on new distribution
+                  - Minor decrease of 0.6% on old distribution
+                  - Overall better distribution balance
               
               model_limitations:
-                - Default RandomForest parameters not robust enough
-                - Basic ensemble size (n_estimators=100 by default)
-                - Unlimited tree depth may cause overfitting
-                - Default min_samples_split may be too aggressive
-                - Missing control for tree randomness
+                - Basic RandomForest with default parameters
+                - No explicit drift handling mechanisms
+                - Default n_estimators may be insufficient
+                - Unlimited tree depth potential overfitting
+                - No class balancing consideration
               
               hyperparameter_recommendations:
                 primary_changes:
-                  - n_estimators: 500  # Increase ensemble size for robustness
-                  - max_depth: 15      # Control tree depth to prevent overfitting
-                  - min_samples_split: 10  # More conservative splits
-                  - min_samples_leaf: 4    # Ensure leaf node stability
-                  - max_features: 'sqrt'   # Increase tree randomization
-                  - bootstrap: True        # Enable bootstrapping
-                  - class_weight: 'balanced'  # Handle any class imbalance
-                
-                alternative_parameters:
-                  - n_estimators: 1000  # Very large ensemble
-                  - max_depth: 20       # Deeper trees if needed
-                  - min_samples_split: 20  # Very conservative splits
+                  n_estimators: 500
+                  max_depth: 15
+                  min_samples_split: 10
+                  class_weight: 'balanced'
+                  max_features: 'sqrt'
+                  bootstrap: True
                 
               alternative_models:
                 gradient_boosting:
-                  rationale: "Better handling of complex patterns and drift"
+                  rationale: "Better handling of distribution shifts"
                   suggested_config:
-                    - model: "XGBClassifier"
+                    - model: "GradientBoostingClassifier"
                     - n_estimators: 300
-                    - learning_rate: 0.01
-                    - max_depth: 8
+                    - learning_rate: 0.1
+                    - max_depth: 5
                     - subsample: 0.8
-                    
-                lightgbm:
-                  rationale: "Faster training with similar performance"
-                  suggested_config:
-                    - model: "LGBMClassifier"
-                    - n_estimators: 400
-                    - learning_rate: 0.01
-                    - num_leaves: 128
-                    - subsample: 0.8
-                
+              
               improvement_priority:
-                1: "Increase RandomForest robustness with primary parameter changes"
-                2: "Test alternative RandomForest parameters if primary fails"
-                3: "Evaluate XGBoost as alternative model"
-                4: "Consider LightGBM if training time becomes issue"
+                1: "Optimize RandomForest parameters"
+                2: "Consider GradientBoosting if needed"
+                3: "Implement robust validation strategy"
               
               expected_impacts:
-                - Increased ensemble size should improve stability
-                - Controlled tree depth should reduce overfitting
-                - Conservative splits should improve generalization
-                - Alternative models might handle drift better
+                - Further reduction in distribution gap
+                - More robust generalization
+                - Maintained old distribution performance
             """
         }
     ]
@@ -628,52 +694,54 @@ def prompt_distill_memories() -> ChatPromptTemplate:
     )
 
     system_prompt = """
-    You are an expert ML engineer analyzing model performance and monitoring data.
+    You are an expert ML engineer analyzing model performance using sklearn components.
 
     Context: You have access to:
-    1. Semantic memory (model code, documentation, dataset info)
-    2. Episodic memory (recent model behavior)
-    3. Monitoring summary (drift and performance analysis)
+    1. Performance metrics for both models on old and new distributions
+    2. Base model code and configuration
 
-    Objective: Provide comprehensive insights about:
-    1. Performance gaps and their causes
-    2. Model limitations and weaknesses
-    3. Potential improvements based on monitoring
-    4. Specific recommendations for changes
-    5. Expected impact of changes
+    Objective: Analyze the model performance and provide sklearn-specific insights about:
+    1. Detailed performance comparison between old and new models
+    2. Quantified gaps and improvements
+    3. Current model limitations
+    4. Specific sklearn parameter recommendations
 
-    Key Analysis Points:
-    1. Performance gaps between reference and new data
-    2. Feature drift impacts
-    3. Model parameter limitations
-    4. Improvement recommendations
-    5. Expected outcomes
-
-    Style: Provide precise, quantitative recommendations with exact parameter values.
+    Analysis Requirements:
+    1. Calculate performance gaps between distributions
+    2. Identify key improvements achieved
+    3. Suggest specific parameter optimizations
+    4. Focus on sklearn-native solutions
 
     Response Format: Format your response as YAML with:
 
     insights:
-      performance_gaps:
-        - [Detailed performance analysis]
-      
-      drift_impact:
-        - [Analysis of feature drift effects]
+      performance_analysis:
+        old_model:
+          - [Performance metrics and gaps]
+        new_model:
+          - [Performance metrics and gaps]
+        key_metrics:
+          - [Key improvements and changes]
       
       model_limitations:
-        - [Current limitations]
+        - [Current parameter limitations]
       
-      improvement_recommendations:
-        architecture_changes:
-          - [Model architecture recommendations]
-        parameter_adjustments:
-          - [Parameter change suggestions]
-        
+      hyperparameter_recommendations:
+        primary_changes:
+          [Specific parameter adjustments]
+      
+      alternative_models:
+        [sklearn_model]:
+          rationale: [Reasoning]
+          suggested_config: [Parameters]
+      
+      improvement_priority:
+        [Ordered list of next steps]
+
       expected_impacts:
         - [Expected outcomes]
 
-    Focus on connecting monitoring insights to specific improvement recommendations.
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()
@@ -697,29 +765,29 @@ def prompt_generate_tiny_change() -> ChatPromptTemplate:
                     from sklearn.ensemble import RandomForestClassifier
                     
                     metrics = {
-                        'model_reference': {},
+                        'model_old': {},
                         'model_new': {},
                         'difference_score_averages': {}
                     }
                     
-                    # Train reference model
-                    model_reference = RandomForestClassifier(
+                    # Train old model
+                    model_old = RandomForestClassifier(
                         n_estimators=100,
                         random_state=42
                     )
-                    model_reference.fit(X_train_reference, y_train_reference)
+                    model_old.fit(X_train_old, y_train_old)
                     
             execution_results:
                 output: |
-                    Model trained and evaluated on the reference distribution: 0.902
-                    Reference model evaluated on the new distribution: 0.617
-                    Average score of reference model: 0.759
+                    Model trained and evaluated on the old distribution: 0.902
+                    old model evaluated on the new distribution: 0.617
+                    Average score of old model: 0.759
                     Training new model on combined data...
-                    New model evaluated on reference distribution: 0.902
+                    New model evaluated on old distribution: 0.902
                     New model evaluated on new distribution: 0.642
                     Average score of new model: 0.772
                     Score difference: 0.013
-                reference_score: 0.902
+                old_score: 0.902
                 new_distribution_score: 0.617
                 score_difference: 0.013
                 success: true
@@ -727,7 +795,7 @@ def prompt_generate_tiny_change() -> ChatPromptTemplate:
             distilled_insights: |
                 insights:
                     performance_gaps:
-                        - Large gap between reference and new distribution
+                        - Large gap between old and new distribution
                         - Model not generalizing well
                     model_characteristics:
                         - Basic RandomForest configuration
@@ -756,20 +824,20 @@ def prompt_generate_tiny_change() -> ChatPromptTemplate:
                 from sklearn.metrics import accuracy_score
                 
                 metrics = {
-                    'model_reference': {},
+                    'model_old': {},
                     'model_new': {},
                     'difference_score_averages': {}
                 }
                 
-                # Load reference data
+                # Load old data
                 dataset_folder = "datasets/financial"
-                X_train_reference = pd.read_csv(f"{dataset_folder}/X_train_reference.csv")
-                X_test_reference = pd.read_csv(f"{dataset_folder}/X_test_reference.csv")
-                y_train_reference = pd.read_csv(f"{dataset_folder}/y_train_reference.csv").squeeze("columns")
-                y_test_reference = pd.read_csv(f"{dataset_folder}/y_test_reference.csv").squeeze("columns")
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
                 
-                # Configure and train reference model with enhanced robustness
-                model_reference = RandomForestClassifier(
+                # Configure and train old model with enhanced robustness
+                model_old = RandomForestClassifier(
                     n_estimators=500,           # Increased for stability
                     max_depth=15,               # Prevent overfitting
                     min_samples_split=20,       # Conservative splits
@@ -779,32 +847,32 @@ def prompt_generate_tiny_change() -> ChatPromptTemplate:
                     bootstrap=True,             # Enable bootstrapping
                     random_state=42
                 )
-                model_reference.fit(X_train_reference, y_train_reference)
+                model_old.fit(X_train_old, y_train_old)
                 
-                # Evaluate reference model
-                y_pred_reference = model_reference.predict(X_test_reference)
-                ref_score_reference = accuracy_score(y_test_reference, y_pred_reference)
-                print(f'Model trained and evaluated on the reference distribution: {ref_score_reference}')
-                metrics['model_reference']['score_reference_data'] = float(ref_score_reference)
+                # Evaluate old model
+                y_pred_old = model_old.predict(X_test_old)
+                ref_score_old = accuracy_score(y_test_old, y_pred_old)
+                print(f'Model trained and evaluated on the old distribution: {ref_score_old}')
+                metrics['model_old']['score_old_data'] = float(ref_score_old)
                 
                 X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
                 y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
-                y_pred_new = model_reference.predict(X_test_new)
+                y_pred_new = model_old.predict(X_test_new)
                 ref_score_new = accuracy_score(y_test_new, y_pred_new)
-                print(f'Reference model evaluated on the new distribution: {ref_score_new}')
-                metrics['model_reference']['score_new_data'] = float(ref_score_new)
+                print(f'old model evaluated on the new distribution: {ref_score_new}')
+                metrics['model_old']['score_new_data'] = float(ref_score_new)
                 
-                ref_score_average = (ref_score_reference + ref_score_new) / 2
-                print(f'Average score of reference model: {ref_score_average}')
-                metrics['model_reference']['score_average'] = float(ref_score_average)
+                ref_score_average = (ref_score_old + ref_score_new) / 2
+                print(f'Average score of old model: {ref_score_average}')
+                metrics['model_old']['score_average'] = float(ref_score_average)
                 
                 print("\\nTraining new model on combined data...")
                 
                 # Load and combine new data
                 X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
                 y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
-                X_train = pd.concat([X_train_reference, X_train_new])
-                y_train = pd.concat([y_train_reference, y_train_new])
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
                 
                 # Train new model with same robust configuration
                 model_new = RandomForestClassifier(
@@ -820,17 +888,17 @@ def prompt_generate_tiny_change() -> ChatPromptTemplate:
                 model_new.fit(X_train, y_train)
                 
                 # Evaluate new model
-                y_pred_reference_new = model_new.predict(X_test_reference)
-                new_score_reference = accuracy_score(y_test_reference, y_pred_reference_new)
-                print(f'New model evaluated on reference distribution: {new_score_reference}')
-                metrics['model_new']['score_reference_data'] = float(new_score_reference)
+                y_pred_old_new = model_new.predict(X_test_old)
+                new_score_old = accuracy_score(y_test_old, y_pred_old_new)
+                print(f'New model evaluated on old distribution: {new_score_old}')
+                metrics['model_new']['score_old_data'] = float(new_score_old)
                 
                 y_pred_new_new = model_new.predict(X_test_new)
                 new_score_new = accuracy_score(y_test_new, y_pred_new_new)
                 print(f'New model evaluated on new distribution: {new_score_new}')
                 metrics['model_new']['score_new_data'] = float(new_score_new)
                 
-                new_score_average = (new_score_reference + new_score_new) / 2
+                new_score_average = (new_score_old + new_score_new) / 2
                 print(f'Average score of new model: {new_score_average}')
                 metrics['model_new']['score_average'] = float(new_score_average)
                 
@@ -853,12 +921,12 @@ def prompt_generate_tiny_change() -> ChatPromptTemplate:
             rationale: |
                 First iteration focuses on fundamental robustness improvements:
                 1. Larger ensemble (500 trees) to improve stability and handle drift
-                2. Tree depth control (15) to prevent overfitting to reference data
+                2. Tree depth control (15) to prevent overfitting to old data
                 3. Conservative split and leaf parameters to build more stable trees
                 4. Feature randomization and class balancing to handle distribution changes
                 These changes aim to create a more robust model that should generalize 
                 better across distributions while maintaining good performance on the
-                reference dataset.
+                old dataset.
             """
         }
     ]
@@ -945,99 +1013,81 @@ def prompt_evaluate_change() -> ChatPromptTemplate:
         {
             "input": """
             current_code: |
-                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.ensemble import StackingClassifier
                 
-                model = GradientBoostingClassifier(
-                    n_estimators=200,
-                    max_depth=6,
-                    learning_rate=0.1,
-                    random_state=42
+                model_new = StackingClassifier(
+                    estimators=[
+                        ('gb', GradientBoostingClassifier(n_estimators=200)),
+                        ('rf', RandomForestClassifier(n_estimators=200))
+                    ],
+                    final_estimator=LogisticRegression(),
+                    cv=5
                 )
-                model.fit(X_train_reference, y_train_reference)
-                
+            
             execution_output: |
-                Model trained and evaluated on the reference distribution: 0.913
-                Reference model evaluated on the new distribution: 0.525
-                Average score of reference model: 0.719
-                New model evaluated on new distribution: 0.533
-                
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
+            
+            current_metrics:
+                on_old_data: 0.907
+                on_new_data: 0.800
+            
             previous_metrics:
-                accuracy: 0.85
+                on_old_data: 0.913
+                on_new_data: 0.717
+                
+            strategy_type: "ensemble_method"
+            
+            improvements:
+                old_distribution: -0.006
+                new_distribution: 0.083
             """,
             "output": """
             evaluation:
-              metrics:
-                accuracy_reference_distribution: 0.913
-                accuracy_new_distribution: 0.525
-                accuracy_average_reference: 0.719
-                accuracy_new_model: 0.533
-                accuracy_delta: 0.008
+              performance_metrics:
+                distribution_gaps:
+                  previous_gap: 0.196  # 0.913 - 0.717
+                  current_gap: 0.107   # 0.907 - 0.800
+                  gap_reduction: 0.089  # 0.196 - 0.107
+                improvements:
+                  old_distribution: -0.006  # Slight regression
+                  new_distribution: 0.083   # Significant improvement
+                relative_changes:
+                  old_distribution_percent: -0.66%
+                  new_distribution_percent: 11.58%
+              
               analysis:
-                - "High performance on reference data (0.913) but poor generalization to new data (0.525)"
-                - "Small improvement on new distribution (+0.008)"
-                - "Model struggles with distribution shift"
-                - "Current hyperparameters may be too aggressive"
+                - "Significant improvement on new distribution (+8.3%)"
+                - "Minimal regression on old distribution (-0.6%)"
+                - "Distribution gap reduced by 8.9 percentage points"
+                - "Better balance between distributions achieved"
+                - "Trade-off between distributions is acceptable"
+              
               risk_assessment:
-                - "Significant performance gap between distributions"
-                - "Current model architecture might not handle drift well"
-                - "Risk of overfitting to reference distribution"
-              recommendation:
-                action: "reject"
-                confidence: "high"
-                reasoning: "Despite small improvement, performance gap is too large. Need to try different approach."
-              next_steps:
-                - "Try hyperparameter_tuning with more conservative settings"
-                - "Consider ensemble_method if tuning fails"
-                - "Evaluate model_selection with more robust architectures"
-            """
-        },
-        {
-            "input": """
-            current_code: |
-                from sklearn.ensemble import RandomForestClassifier
-                
-                model = RandomForestClassifier(
-                    n_estimators=500,
-                    max_depth=15,
-                    min_samples_split=10,
-                    class_weight='balanced',
-                    random_state=42
-                )
-                model.fit(X_train_combined, y_train_combined)
-                
-            execution_output: |
-                Model trained and evaluated on the reference distribution: 0.895
-                Reference model evaluated on the new distribution: 0.612
-                Average score of reference model: 0.753
-                New model evaluated on new distribution: 0.635
-                
-            previous_metrics:
-                accuracy: 0.525
-            """,
-            "output": """
-            evaluation:
-              metrics:
-                accuracy_reference_distribution: 0.895
-                accuracy_new_distribution: 0.612
-                accuracy_average_reference: 0.753
-                accuracy_new_model: 0.635
-                accuracy_delta: 0.110
-              analysis:
-                - "Significant improvement on new distribution (+0.110)"
-                - "Better balance between distributions"
-                - "Conservative parameters showing promise"
-                - "Still room for improvement"
-              risk_assessment:
-                - "Performance gap still exists but reduced"
-                - "May need fine-tuning of current approach"
-                - "Could benefit from ensemble methods"
+                - "10.7% remaining performance gap"
+                - "Small regression on old distribution is within tolerance"
+                - "New distribution improvement outweighs minor regression"
+                - "Ensemble shows good adaptation capability"
+              
+              strategy_effectiveness:
+                approach: "ensemble_method"
+                strengths:
+                  - "Successfully combines multiple model strengths"
+                  - "Better handles distribution shift"
+                  - "Maintains most old distribution performance"
+                limitations:
+                  - "Slight regression on old distribution"
+                  - "Added model complexity"
+              
               recommendation:
                 action: "accept"
-                confidence: "medium"
-                reasoning: "Notable improvement achieved, but can be enhanced further with available strategies"
+                confidence: "high"
+                reasoning: "Strong improvement on new distribution with minimal old distribution impact"
+              
               next_steps:
-                - "Try ensemble_method to combine with previous model"
-                - "Fine-tune hyperparameter_tuning if ensemble fails"
+                - "Consider hyperparameter_tuning to fine-tune ensemble weights"
+                - "Try model_selection for additional base estimators"
+                - "Explore ensemble_method with different stacking strategies"
             """
         }
     ]
@@ -1046,12 +1096,10 @@ def prompt_evaluate_change() -> ChatPromptTemplate:
         example["input"] = textwrap.dedent(example["input"]).strip()
         example["output"] = textwrap.dedent(example["output"]).strip()
 
-    example_prompt = ChatPromptTemplate.from_messages(
-        [
-            ("human", "{input}"),
-            ("ai", "{output}"),
-        ]
-    )
+    example_prompt = ChatPromptTemplate.from_messages([
+        ("human", "{input}"),
+        ("ai", "{output}"),
+    ])
     
     few_shot_prompt = FewShotChatMessagePromptTemplate(
         example_prompt=example_prompt,
@@ -1059,49 +1107,75 @@ def prompt_evaluate_change() -> ChatPromptTemplate:
     )
 
     system_prompt = """
-    You are an expert ML engineer evaluating model changes with THREE available improvement strategies:
-    1. model_selection: Trying different model architectures
-    2. hyperparameter_tuning: Optimizing model parameters
-    3. ensemble_method: Combining multiple models
+    You are an expert ML engineer evaluating model improvements. Your goal is to assess changes and recommend next steps.
 
-    Context: You're evaluating changes to improve model performance on drift data.
-    You cannot collect more data or implement monitoring - focus ONLY on the three available strategies.
+    Context: You have:
+    1. Current and previous model metrics
+    2. Applied strategy type
+    3. Calculated improvements
+    4. Model code changes
 
     Objective: Provide a comprehensive evaluation that:
-    1. Analyzes performance metrics in detail
-    2. Assesses the model's ability to handle distribution drift
-    3. Makes clear recommendations from available strategies
-    4. Suggests concrete next steps using ONLY the three strategies
-    
-    Evaluation Focus:
-    - Reference vs new distribution performance
-    - Improvement in handling drift
-    - Model robustness and generalization
-    - Strategy effectiveness
+    1. Analyzes performance changes in detail
+    2. Assesses distribution adaptation
+    3. Evaluates strategy effectiveness
+    4. Recommends clear next steps
 
-    Style: Provide quantitative analysis focused on distribution shift and improvement potential.
+    Evaluation Focus:
+    1. Distribution gap analysis:
+       - Previous gap (old vs new distribution)
+       - Current gap
+       - Gap reduction
+    2. Performance trade-offs:
+       - Old distribution maintenance
+       - New distribution improvement
+       - Acceptable regression thresholds
+    3. Strategy effectiveness:
+       - Approach strengths
+       - Limitations
+       - Risk assessment
+    4. Next steps based on available strategies:
+       - model_selection
+       - hyperparameter_tuning
+       - ensemble_method
+
+    Success Criteria:
+    1. Significant improvement on new distribution (>3%)
+    2. Minimal regression on old distribution (<1%)
+    3. Overall distribution gap reduction
+    4. Clear strategy effectiveness
 
     Response Format: Format your response as YAML with:
 
     evaluation:
-      metrics:
-        accuracy_reference_distribution: [number]
-        accuracy_new_distribution: [number]
-        accuracy_average_reference: [number]
-        accuracy_new_model: [number]
-        accuracy_delta: [number]
+      performance_metrics:
+        distribution_gaps:
+          [gap analysis]
+        improvements:
+          [improvement metrics]
+        relative_changes:
+          [percentage changes]
+      
       analysis:
-        - [Key findings about distribution handling]
+        - [Key findings]
+      
       risk_assessment:
-        - [Potential risks with current approach]
+        - [Potential risks]
+      
+      strategy_effectiveness:
+        approach: [strategy_type]
+        strengths: [list]
+        limitations: [list]
+      
       recommendation:
         action: ["accept" or "reject"]
         confidence: ["high", "medium", or "low"]
-        reasoning: [Why accept/reject focusing on drift handling]
+        reasoning: [explanation]
+      
       next_steps:
-        - [ONLY suggest steps from: model_selection, hyperparameter_tuning, ensemble_method]
+        - [ONLY from: model_selection, hyperparameter_tuning, ensemble_method]
 
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()
@@ -1114,285 +1188,137 @@ def prompt_evaluate_change() -> ChatPromptTemplate:
 
     return final_prompt
 
-# def prompt_evaluate_change() -> ChatPromptTemplate:
-#     examples = [
-#         {
-#             "input": """
-#             current_code: |
-#                 from sklearn.ensemble import RandomForestClassifier
-#                 from sklearn.preprocessing import StandardScaler
-#                 from sklearn.feature_selection import SelectFromModel
-                
-#                 model = RandomForestClassifier(
-#                     n_estimators=150,
-#                     max_depth=10,
-#                     min_samples_split=5,
-#                     random_state=42
-#                 )
-#                 X_train_scaled = scaler.fit_transform(X_train)
-#                 X_test_scaled = scaler.transform(X_test)
-#                 selector = SelectFromModel(estimator=model, threshold='mean')
-#                 X_train_selected = selector.fit_transform(X_train_scaled, y_train)
-#                 X_test_selected = selector.transform(X_test_scaled)
-#                 model.fit(X_train_selected, y_train)
-                
-#             execution_output: |
-#                 Training completed successfully.
-#                 Previous Model Accuracy: 0.82
-#                 New Model Accuracy: 0.85
-#                 Feature Count Before Selection: 20
-#                 Feature Count After Selection: 12
-#                 Training Time: 45.2 seconds
-#                 Memory Usage: 128MB
-            
-#             previous_metrics:
-#                 accuracy: 0.82
-#                 training_time: 38.5
-#             """,
-#             "output": """
-#             evaluation:
-#               metrics:
-#                 accuracy_previous: 0.82
-#                 accuracy_new: 0.85
-#                 accuracy_delta: 0.03
-#                 feature_reduction: 0.40
-#                 training_time_change: 0.17
-#               analysis:
-#                 - "Significant accuracy improvement (+3%)"
-#                 - "Successful feature reduction (40% fewer features)"
-#                 - "Acceptable increase in training time (17%)"
-#                 - "Memory usage within reasonable bounds"
-#               risk_assessment:
-#                 - "Feature selection may impact model interpretability"
-#                 - "Increased training time needs monitoring"
-#                 - "Reduced feature set could affect edge cases"
-#               recommendation:
-#                 action: "accept"
-#                 confidence: "high"
-#                 reasoning: "Strong accuracy improvement with manageable tradeoffs"
-#               next_steps:
-#                 - "Monitor performance on edge cases"
-#                 - "Consider feature importance analysis"
-#                 - "Document selected features for domain experts"
-#             """
-#         },
-#         {
-#             "input": """
-#             current_code: |
-#                 from sklearn.ensemble import RandomForestClassifier
-#                 from sklearn.preprocessing import StandardScaler
-                
-#                 model = RandomForestClassifier(
-#                     n_estimators=300,
-#                     max_depth=None,
-#                     min_samples_split=2,
-#                     random_state=42
-#                 )
-#                 X_train_scaled = scaler.fit_transform(X_train)
-#                 X_test_scaled = scaler.transform(X_test)
-#                 model.fit(X_train_scaled, y_train)
-                
-#             execution_output: |
-#                 Training completed successfully.
-#                 Previous Model Accuracy: 0.85
-#                 New Model Accuracy: 0.852
-#                 Training Time: 89.5 seconds
-#                 Memory Usage: 256MB
-                
-#             previous_metrics:
-#                 accuracy: 0.85
-#                 training_time: 45.2
-#             """,
-#             "output": """
-#             evaluation:
-#               metrics:
-#                 accuracy_previous: 0.85
-#                 accuracy_new: 0.852
-#                 accuracy_delta: 0.002
-#                 training_time_change: 0.98
-#               analysis:
-#                 - "Minimal accuracy improvement (0.2%)"
-#                 - "Training time nearly doubled"
-#                 - "Significant increase in memory usage"
-#                 - "Diminishing returns from increased complexity"
-#               risk_assessment:
-#                 - "Resource usage becoming concerning"
-#                 - "Cost-benefit ratio unfavorable"
-#                 - "Potential overfitting risk"
-#               recommendation:
-#                 action: "reject"
-#                 confidence: "high"
-#                 reasoning: "Marginal gains don't justify increased resource usage"
-#               next_steps:
-#                 - "Revert to previous configuration"
-#                 - "Explore alternative optimization strategies"
-#                 - "Consider different architecture changes"
-#             """
-#         }
-#     ]
-
-#     for example in examples:
-#         example["input"] = textwrap.dedent(example["input"]).strip()
-#         example["output"] = textwrap.dedent(example["output"]).strip()
-
-#     example_prompt = ChatPromptTemplate.from_messages(
-#         [
-#             ("human", "{input}"),
-#             ("ai", "{output}"),
-#         ]
-#     )
-    
-#     few_shot_prompt = FewShotChatMessagePromptTemplate(
-#         example_prompt=example_prompt,
-#         examples=examples,
-#     )
-
-#     system_prompt = """
-#     You are an expert machine learning engineer tasked with evaluating model changes.
-
-#     Context: You have the modified model code, execution results, and previous performance metrics.
-
-#     Objective: Provide a comprehensive evaluation of the changes that:
-#     1. Analyzes performance metrics in detail
-#     2. Assesses resource usage implications
-#     3. Identifies potential risks and tradeoffs
-#     4. Makes a clear recommendation with confidence level
-#     5. Suggests next steps based on the outcome
-    
-#     The evaluation should consider:
-#     - Accuracy improvements
-#     - Training time changes
-#     - Memory usage
-#     - Code complexity
-#     - Resource efficiency
-#     - Potential risks
-#     - Future implications
-
-#     Style: Provide a detailed, data-driven analysis with clear metrics and reasoning.
-
-#     Tone: Technical and objective, focusing on quantitative measures and practical implications.
-
-#     Audience: ML engineers and technical stakeholders who need to make decisions about model changes.
-
-#     Response Format: Format your response as YAML with the following structure:
-
-#     evaluation:
-#       metrics:
-#         accuracy_previous: [number]
-#         accuracy_new: [number]
-#         accuracy_delta: [number]
-#         [other relevant metrics]
-#       analysis:
-#         - [Key findings about performance]
-#       risk_assessment:
-#         - [Potential risks and concerns]
-#       recommendation:
-#         action: ["accept" or "reject"]
-#         confidence: ["high", "medium", or "low"]
-#         reasoning: [Detailed explanation]
-#       next_steps:
-#         - [Recommended actions]
-
-#     Only provide the YAML-formatted output. Do not include any other explanation or commentary.
-#     """
-
-#     system_prompt = textwrap.dedent(system_prompt).strip()
-
-#     final_prompt = ChatPromptTemplate.from_messages([
-#         ("system", system_prompt),
-#         few_shot_prompt,
-#         ("human", "{input}"),
-#     ])
-
-#     return final_prompt
 
 def prompt_fix_code() -> ChatPromptTemplate:
     examples = [
         {
             "input": """
             current_code: |
-                from sklearn.ensemble import RandomForestClassifier
-                from sklearn.preprocessing import StandardScaler
+                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.metrics import accuracy_score
+                import yaml
                 
-                scaler = StandardScaler()
-                X_train_scaled = scaler.fit_transform(X_train)
-                X_test_scaled = scaler.transform(X_test)
+                # Initialize metrics dictionaries
+                model_new_score = {
+                    'on_new_data': 0.0
+                }  # Missing on_old_data
                 
-                model = RandomForestClassifier(n_estimators=150)
-                model.fit(X_train_scaled)
+                model_old_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                
+                model = GradientBoostingClassifier(n_estimators=150)
+                model.fit(X_train_scaled)  # Missing y_train
             
             error_output: |
                 TypeError: fit() missing 1 required positional argument: 'y'
             """,
             "output": """
             fixed_code: |
-                from sklearn.ensemble import RandomForestClassifier
-                from sklearn.preprocessing import StandardScaler
+                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.metrics import accuracy_score
+                import yaml
                 
-                # Scale features
-                scaler = StandardScaler()
-                X_train_scaled = scaler.fit_transform(X_train)
-                X_test_scaled = scaler.transform(X_test)
+                # Initialize metrics dictionaries
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0  # Added missing metric
+                }
                 
-                # Initialize and train model with both X and y
-                model = RandomForestClassifier(n_estimators=150)
-                model.fit(X_train_scaled, y_train)  # Added missing y_train argument
+                model_old_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                
+                # Train and evaluate old model
+                model = GradientBoostingClassifier(n_estimators=150)
+                model.fit(X_train_scaled, y_train)  # Added missing y_train
             
             fixes_made:
               - Added missing y_train argument to model.fit()
-              - Added clarifying comments
-              - Maintained original functionality
+              - Added missing on_old_data metric
+              - Improved code organization with comments
             
             validation_steps:
-              - Verify y_train is available in scope
-              - Check data shapes match
-              - Ensure scaling is applied consistently
+              - Verify metrics dictionary structure is complete
+              - Check y_train is available in scope
+              - Validate data shapes match
             """
         },
         {
             "input": """
             current_code: |
+                import yaml
                 from sklearn.ensemble import RandomForestClassifier
-                from sklearn.preprocessing import StandardScaler
-                from sklearn.feature_selection import SelectFromModel
+                from sklearn.metrics import accuracy_score
                 
-                scaler = StandardScaler()
-                selector = SelectFromModel(RandomForestClassifier())
+                metrics = {
+                    'difference_score_averages': {
+                        'score_average': 0.0
+                    }
+                }  # Wrong metrics format
                 
-                X_train_scaled = scaler.fit_transform(X_train)
-                X_train_selected = selector.fit_transform(X_train_scaled)
-                X_test_selected = selector.transform(X_test_scaled)
+                model_old = RandomForestClassifier()
+                model_old.fit(X_train_old, y_train_old)
+                
+                # Test missing error handling
+                score = accuracy_score(y_test_old, model_old.predict(X_test_old))
+                print(f'Score: {score}')
             
             error_output: |
-                NameError: name 'X_test_scaled' is not defined
+                NameError: name 'X_test_old' is not defined
             """,
             "output": """
             fixed_code: |
+                import yaml
                 from sklearn.ensemble import RandomForestClassifier
-                from sklearn.preprocessing import StandardScaler
-                from sklearn.feature_selection import SelectFromModel
+                from sklearn.metrics import accuracy_score
                 
-                # Scale both training and test data
-                scaler = StandardScaler()
-                X_train_scaled = scaler.fit_transform(X_train)
-                X_test_scaled = scaler.transform(X_test)  # Added missing scaling step
+                # Initialize metrics with correct format
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                model_old_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
                 
-                # Feature selection with proper ordering
-                base_model = RandomForestClassifier(random_state=42)
-                selector = SelectFromModel(base_model)
-                X_train_selected = selector.fit_transform(X_train_scaled, y_train)  # Added y_train
-                X_test_selected = selector.transform(X_test_scaled)
+                try:
+                    # Train and evaluate old model
+                    model_old = RandomForestClassifier(random_state=42)
+                    model_old.fit(X_train_old, y_train_old)
+                    
+                    # Test old model with error handling
+                    old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))
+                    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')
+                    model_old_score['on_old_data'] = float(old_score_old)
+                    
+                except Exception as e:
+                    print(f"Error during model training/evaluation: {str(e)}")
+                    
+                # Save metrics
+                metrics = {
+                    'model_new_score': model_new_score,
+                    'model_old_score': model_old_score
+                }
+                
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump(metrics, f)
             
             fixes_made:
-              - Added missing test data scaling step
-              - Added y_train to selector.fit_transform()
+              - Updated metrics format to new structure
+              - Added error handling for data access
               - Added random_state for reproducibility
-              - Improved code organization
+              - Improved metrics saving
+              - Added proper print messages
             
             validation_steps:
-              - Verify all data transformations are in correct order
-              - Check consistency between training and test preprocessing
-              - Validate feature selection output shapes
+              - Verify metrics format matches requirements
+              - Check all data variables are in scope
+              - Validate metrics file creation
+              - Verify error handling catches issues
             """
         }
     ]
@@ -1414,34 +1340,49 @@ def prompt_fix_code() -> ChatPromptTemplate:
     )
 
     system_prompt = """
-    You are an expert machine learning engineer tasked with fixing code errors.
+    You are an expert ML engineer tasked with fixing code errors in model training and evaluation.
 
-    Context: You have code that produced an error and the error message.
+    Context: You have code that produced an error and needs to be fixed while maintaining proper metrics tracking.
+
+    Critical Requirements:
+    1. Maintain correct metrics format:
+       model_new_score:
+           on_new_data: [score]
+           on_old_data: [score]
+       model_old_score:
+           on_new_data: [score]
+           on_old_data: [score]
+
+    2. Ensure proper error handling
+    3. Include metrics file saving
+    4. Use clear print messages for model evaluation
+    5. Keep sklearn-compatible code structure
 
     Objective: Fix the code while:
     1. Addressing the specific error
-    2. Maintaining original functionality
-    3. Adding proper error prevention
-    4. Improving code organization
-    5. Adding relevant comments
-    6. Suggesting validation steps
+    2. Ensuring correct metrics tracking
+    3. Maintaining proper evaluation flow
+    4. Adding error prevention
+    5. Improving code organization
+    6. Using descriptive print messages
 
-    Style: Provide clean, well-documented code with clear organization.
+    Style Guidelines:
+    1. Clear metrics initialization
+    2. Proper error handling
+    3. Consistent print messages
+    4. Clean code organization
+    5. Helpful comments
 
-    Tone: Technical and precise, focusing on best practices and error prevention.
-
-    Audience: ML engineers who need to understand and maintain the fixed code.
-
-    Response Format: Format your response as YAML with the following structure:
+    Response Format: Format your response as YAML with:
 
     fixed_code: |
       [COMPLETE FIXED CODE]
     fixes_made:
-      - [List of specific fixes applied]
+      - [List of specific fixes]
     validation_steps:
       - [Steps to validate the fixes]
 
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()
@@ -1564,17 +1505,17 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                 import lightgbm as lgb
                 from sklearn.metrics import accuracy_score
                 
-                model_reference = lgb.LGBMClassifier(
+                model_old = lgb.LGBMClassifier(
                     n_estimators=100,
                     learning_rate=0.1,
                     max_depth=6
                 )
                 
-                model_reference.fit(
-                    X_train_reference, 
-                    y_train_reference,
+                model_old.fit(
+                    X_train_old, 
+                    y_train_old,
                     early_stopping_rounds=10,
-                    eval_set=[(X_test_reference, y_test_reference)]
+                    eval_set=[(X_test_old, y_test_old)]
                 )
             
             error_output: |
@@ -1586,7 +1527,7 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                 from sklearn.metrics import accuracy_score
                 
                 # Configure LightGBM with appropriate parameters
-                model_reference = lgb.LGBMClassifier(
+                model_old = lgb.LGBMClassifier(
                     n_estimators=100,
                     learning_rate=0.1,
                     max_depth=6,
@@ -1594,10 +1535,10 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                 )
                 
                 # Train using proper LightGBM API
-                model_reference.fit(
-                    X_train_reference, 
-                    y_train_reference,
-                    eval_set=[(X_test_reference, y_test_reference)],
+                model_old.fit(
+                    X_train_old, 
+                    y_train_old,
+                    eval_set=[(X_test_old, y_test_old)],
                     callbacks=[lgb.early_stopping(10)]  # Use callbacks for early stopping
                 )
             
@@ -1626,7 +1567,7 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                 )
                 
                 model.fit(X_train, y_train, eval_metric=['error'])
-                y_pred = model.predict(X_test_reference)
+                y_pred = model.predict(X_test_old)
             
             error_output: |
                 ValueError: Invalid eval_metric: must be list of tuples or dict
@@ -1649,12 +1590,12 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                 model.fit(
                     X_train, 
                     y_train,
-                    eval_set=[(X_train, y_train), (X_test_reference, y_test_reference)],
+                    eval_set=[(X_train, y_train), (X_test_old, y_test_old)],
                     verbose=False
                 )
                 
                 # Make predictions
-                y_pred = model.predict(X_test_reference)
+                y_pred = model.predict(X_test_old)
             
             fixes_made:
               - Moved eval_metric to constructor
@@ -1861,68 +1802,47 @@ def prompt_analyze_improvement_needs() -> ChatPromptTemplate:
     examples = [
         {
             "input": """
-            current_performance:
-              Model trained and evaluated on the reference distribution: 0.85
-              Reference model evaluated on the new distribution: 0.72
-              Average score of reference model: 0.785
-              
-              Training new model on combined data...
-              New model evaluated on reference distribution: 0.84
-              New model evaluated on new distribution: 0.73
-              Average score of new model: 0.785
-              
-              Score difference: 0.0
-            
-            improvement_history:
-              - iteration: 0
-                strategy: model_selection
-                changes: "Switched to XGBoost"
-                accuracy_change: 0.01
-                status: reject
+            current_performance: |
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
+                
+                Training new model on combined data...
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
             
             strategy_results:
-              model_selection:
-                tried: true
-                models_tried: ["XGBoost"]
-                best_accuracy: 0.785
-              hyperparameter_tuning:
-                tried: false
-                best_accuracy: 0.0
-              ensemble_method:
-                tried: false
-                best_accuracy: 0.0
-            
-            threshold: 0.05
-            
-            monitoring_report:
-              drift_analysis:
-                - feature: "income"
-                  drift_score: 0.15
-                - feature: "credit_score" 
-                  drift_score: 0.08
-                - feature: "age"
-                  drift_score: 0.03
+                model_selection:
+                    tried: false
+                    models_tried: []
+                    best_accuracy: 0.0
+                hyperparameter_tuning:
+                    tried: false
+                    best_accuracy: 0.0
+                ensemble_method:
+                    tried: false
+                    best_accuracy: 0.0
             """,
             "output": """
-            recommended_strategy: "hyperparameter_tuning"
+            recommended_strategy: "model_selection"
             reasoning: |
-                1. Model selection strategy has been tried with XGBoost but showed minimal improvement (0.01)
-                2. Significant drift in income feature (0.15) suggests need for model robustness
-                3. Hyperparameter tuning not yet attempted and could help adapt to drift
-                4. Current performance shows good base accuracy but poor generalization
+                1. Performance analysis shows significant distribution gap (0.913 -> 0.717)
+                2. New model shows promising improvement on new distribution (0.800)
+                3. No strategies have been tried yet
+                4. Model selection is best first step to establish baseline
+                5. Current model shows potential for architecture improvements
             performance_gaps:
-              - "13% drop in accuracy on new distribution (0.85 -> 0.72)"
-              - "No improvement from combined training (0.0 difference)"
-              - "Current best accuracy (0.785) below target threshold (0.05 improvement needed)"
-            tried_strategies: ["model_selection"]
+                - "19.6% initial gap on old vs new distribution (0.913 -> 0.717)"
+                - "10.7% remaining gap after retraining (0.907 -> 0.800)"
+                - "8.3% improvement achieved on new distribution"
+            tried_strategies: []
             next_steps:
-              - "Try hyperparameter tuning focusing on tree depth and sample weights"
-              - "If unsuccessful, move to ensemble methods"
-              - "Consider feature-specific model tuning for high-drift features"
+                - "Try GradientBoostingClassifier for better handling of distribution shifts"
+                - "If unsuccessful, proceed with hyperparameter tuning"
+                - "Consider ensemble methods as final strategy"
             """
         }
     ]
-
+    
     for example in examples:
         example["input"] = textwrap.dedent(example["input"]).strip()
         example["output"] = textwrap.dedent(example["output"]).strip()
@@ -1943,40 +1863,41 @@ def prompt_analyze_improvement_needs() -> ChatPromptTemplate:
     You are an expert ML engineer specializing in model improvement strategy analysis.
 
     Context: You have:
-    1. Current model performance metrics
-    2. History of improvement attempts
-    3. Results from previous strategies
-    4. Performance threshold target
-    5. Monitoring report with drift analysis
+    1. Current model performance metrics on old and new distributions
+    2. Results from previous improvement strategies
+    3. List of available strategies to try
 
-    Objective: Analyze the current state and recommend the next best strategy to improve model performance.
+    Objective: Analyze the current performance and recommend the next best strategy.
     Consider:
-    1. Performance gaps and patterns
-    2. Previously tried strategies and their results
-    3. Drift patterns in features
-    4. Distance from target threshold
-    5. Potential for each untried strategy
+    1. Performance gaps between distributions
+    2. Improvements achieved by retraining
+    3. Previously tried strategies
+    4. Most promising next steps
 
-    Strategies (in typical order of application):
-    1. Model Selection: Trying different algorithms
+    Available Strategies (in typical order):
+    1. Model Selection: Trying different sklearn algorithms
     2. Hyperparameter Tuning: Optimizing model configuration
     3. Ensemble Methods: Combining multiple models
 
-    Style: Provide clear, data-driven recommendations with specific reasoning.
+    Analysis Requirements:
+    1. Calculate exact performance gaps
+    2. Evaluate distribution adaptation
+    3. Consider untried strategies first
+    4. Provide concrete next steps
 
     Response Format: Format your response as YAML with:
 
     recommended_strategy: [strategy_name]
     reasoning: |
-      [Detailed reasoning for recommendation]
+      [Numbered list of reasons for recommendation]
     performance_gaps:
-      - [List of specific gaps identified]
+      - [Quantified performance differences]
     tried_strategies:
-      - [List of previously attempted strategies]
+      - [List of attempted strategies]
     next_steps:
-      - [Specific next actions to take]
+      - [Concrete actions to take]
 
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()
@@ -1986,8 +1907,9 @@ def prompt_analyze_improvement_needs() -> ChatPromptTemplate:
         few_shot_prompt,
         ("human", "{input}"),
     ])
-
+    
     return final_prompt
+
 
 def prompt_model_selection_change() -> ChatPromptTemplate:
     examples = [
@@ -2003,126 +1925,85 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
                 model.fit(X_train, y_train)
             
             execution_output: |
-                Model trained and evaluated on the reference distribution: 0.82
-                Reference model evaluated on the new distribution: 0.71
-                Average score of reference model: 0.765
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
+                
+                Training new model on combined data...
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
             
             models_tried: []
             
-            dataset_representation:
-                num_features: 15
-                num_samples: 50000
-                feature_types: 
-                    numerical: 10
-                    categorical: 5
-                target_type: "binary"
-                missing_values: false
+            previous_metrics:
+                model_old_score:  # Previous baseline performance
+                    on_new_data: 0.717
+                    on_old_data: 0.913
             """,
             "output": """
-            model_name: "XGBoostClassifier"
+            model_name: "GradientBoostingClassifier"
             new_training_code: |
-                import xgboost as xgb
-                from sklearn.metrics import accuracy_score
                 import yaml
+                import pandas as pd
+                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.metrics import accuracy_score
                 
-                metrics = {
-                    'model_reference': {},
-                    'model_new': {},
-                    'difference_score_averages': {}
+                # Initialize metrics dictionary
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
                 }
                 
-                # Configure XGBoost for balanced performance and generalization
-                model_reference = xgb.XGBClassifier(
-                    n_estimators=100,
-                    learning_rate=0.1,
-                    max_depth=6,
-                    min_child_weight=1,
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    objective='binary:logistic',
-                    random_state=42
-                )
-                
-                # Train and evaluate reference model
-                model_reference.fit(
-                    X_train_reference, 
-                    y_train_reference,
-                    eval_set=[(X_test_reference, y_test_reference)],
-                    early_stopping_rounds=10,
-                    verbose=False
-                )
-                
-                # Test reference model
-                ref_score_reference = accuracy_score(y_test_reference, model_reference.predict(X_test_reference))
-                print(f'Model trained and evaluated on the reference distribution: {ref_score_reference}')
-                metrics['model_reference']['score_reference_data'] = float(ref_score_reference)
-                
-                ref_score_new = accuracy_score(y_test_new, model_reference.predict(X_test_new))
-                print(f'Reference model evaluated on the new distribution: {ref_score_new}')
-                metrics['model_reference']['score_new_data'] = float(ref_score_new)
-                
-                ref_score_average = (ref_score_reference + ref_score_new) / 2
-                print(f'Average score of reference model: {ref_score_average}')
-                metrics['model_reference']['score_average'] = float(ref_score_average)
-                
-                print("\nTraining new model on combined data...")
-                
                 # Train new model on combined data
-                X_train = pd.concat([X_train_reference, X_train_new])
-                y_train = pd.concat([y_train_reference, y_train_new])
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
                 
-                model_new = xgb.XGBClassifier(
+                model_new = GradientBoostingClassifier(
                     n_estimators=100,
                     learning_rate=0.1,
                     max_depth=6,
-                    min_child_weight=1,
                     subsample=0.8,
-                    colsample_bytree=0.8,
-                    objective='binary:logistic',
+                    validation_fraction=0.1,
+                    n_iter_no_change=10,
                     random_state=42
                 )
                 
-                model_new.fit(
-                    X_train, 
-                    y_train,
-                    eval_set=[(X_test_reference, y_test_reference)],
-                    early_stopping_rounds=10,
-                    verbose=False
-                )
+                model_new.fit(X_train, y_train)
                 
-                # Evaluate new model
-                new_score_reference = accuracy_score(y_test_reference, model_new.predict(X_test_reference))
-                print(f'New model evaluated on reference distribution: {new_score_reference}')
-                metrics['model_new']['score_reference_data'] = float(new_score_reference)
+                # Evaluate new model on old test set
+                new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+                print(f'New model trained and evaluated on old distribution: {new_score_old}')
+                model_new_score['on_old_data'] = float(new_score_old)
                 
+                # Evaluate new model on new test set
                 new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
                 print(f'New model evaluated on new distribution: {new_score_new}')
-                metrics['model_new']['score_new_data'] = float(new_score_new)
+                model_new_score['on_new_data'] = float(new_score_new)
                 
-                new_score_average = (new_score_reference + new_score_new) / 2
-                print(f'Average score of new model: {new_score_average}')
-                metrics['model_new']['score_average'] = float(new_score_average)
-                
-                score_difference = new_score_average - ref_score_average
-                print(f'\nScore difference: {score_difference}')
-                metrics['difference_score_averages']['score_average'] = float(score_difference)
-                
-                with open('retraining_metrics.yaml', 'w') as f:
-                    yaml.dump(metrics, f)
+                # Save metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             
             changes_made:
-              - "Switched from RandomForest to XGBoost"
-              - "Added early stopping with validation set"
-              - "Implemented balanced feature sampling"
-              - "Added performance tracking metrics"
+              - "Switched from RandomForest to GradientBoosting"
+              - "Added early stopping with n_iter_no_change"
+              - "Implemented subsample=0.8 for better generalization"
+              - "Updated metrics format to track performance"
+              
+            parameters:
+                n_estimators: 100
+                learning_rate: 0.1
+                max_depth: 6
+                subsample: 0.8
+                validation_fraction: 0.1
+                n_iter_no_change: 10
             
             rationale: |
-                XGBoost selected because:
-                1. Better handling of imbalanced data through gradient boosting
-                2. Regularization parameters for drift adaptation
-                3. Feature subsampling for better generalization
-                4. Early stopping to prevent overfitting
-                5. Suitable for dataset size (50K samples) and feature count (15)
+                GradientBoostingClassifier selected because:
+                1. Better sequential learning for handling distribution shifts
+                2. Built-in early stopping capabilities
+                3. Stochastic gradient boosting for improved generalization
+                4. Strong performance on both old and new distributions
+                5. Maintains sklearn API compatibility
             """
         }
     ]
@@ -2131,12 +2012,10 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
         example["input"] = textwrap.dedent(example["input"]).strip()
         example["output"] = textwrap.dedent(example["output"]).strip()
 
-    example_prompt = ChatPromptTemplate.from_messages(
-        [
-            ("human", "{input}"),
-            ("ai", "{output}"),
-        ]
-    )
+    example_prompt = ChatPromptTemplate.from_messages([
+        ("human", "{input}"),
+        ("ai", "{output}"),
+    ])
     
     few_shot_prompt = FewShotChatMessagePromptTemplate(
         example_prompt=example_prompt,
@@ -2148,29 +2027,30 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
 
     Context: You have:
     1. Current model code and configuration
-    2. Performance metrics on reference and new data
-    3. Dataset characteristics
-    4. List of previously tried models
+    2. Performance metrics from previous run
+    3. List of previously tried models
 
     Objective: Select and implement a new model architecture that:
-    1. Better handles the observed performance gaps
-    2. Is appropriate for the dataset characteristics
-    3. Maintains the same input/output interface
-    4. Implements proper evaluation metrics
-    5. Uses best practices for the chosen model
+    1. Better handles distribution shifts
+    2. Maintains performance on old distribution
+    3. Improves performance on new distribution
+    4. Uses best practices for the chosen model
+
+    Critical Requirements:
+    1. Only save new model metrics to 'slow_graph_metrics.yaml'
+    2. Use metrics format:
+       model_new_score:
+           on_new_data: [score]
+           on_old_data: [score]
+    3. Previous baseline metrics are provided in input
+    4. Only use sklearn-compatible models
 
     Model Selection Guidelines:
-    1. Consider dataset size and feature types
-    2. Balance complexity with interpretability
-    3. Consider training speed and resource requirements
-    4. Implement appropriate default parameters
-    5. Include proper evaluation setup
-
-    Style: Provide clean, well-structured implementation with:
-    1. Proper imports
-    2. Clear parameter settings
-    3. Comprehensive evaluation
-    4. Performance metrics logging
+    1. Consider model's ability to handle distribution shifts
+    2. Use proper regularization techniques
+    3. Implement early stopping when available
+    4. Set appropriate default parameters
+    5. Don't recompute old model metrics
 
     Response Format: Format your response as YAML with:
 
@@ -2179,10 +2059,12 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
       [COMPLETE IMPLEMENTATION]
     changes_made:
       - [List of significant changes]
+    parameters:
+      [Dictionary of key parameters]
     rationale: |
       [Detailed explanation of model choice]
 
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()
@@ -2195,14 +2077,15 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
 
     return final_prompt
 
+
 def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
     examples = [
         {
             "input": """
             current_code: |
-                import xgboost as xgb
+                from sklearn.ensemble import GradientBoostingClassifier
                 
-                model = xgb.XGBClassifier(
+                model = GradientBoostingClassifier(
                     n_estimators=100,
                     learning_rate=0.1,
                     max_depth=6,
@@ -2211,83 +2094,95 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
                 model.fit(X_train, y_train)
             
             execution_output: |
-                Model trained and evaluated on the reference distribution: 0.84
-                Reference model evaluated on the new distribution: 0.76
-                Average score of reference model: 0.80
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
+                
+                Training new model on combined data...
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
             
-            current_params:
-                n_estimators: 100
-                learning_rate: 0.1
-                max_depth: 6
+            current_params: {
+                'n_estimators': 100,
+                'learning_rate': 0.1,
+                'max_depth': 6
+            }
             
-            dataset_representation:
-                num_features: 15
-                num_samples: 50000
-                feature_types: 
-                    numerical: 10
-                    categorical: 5
-                target_type: "binary"
-                class_balance: "imbalanced"
+            previous_metrics:
+                model_old_score:  # Previous baseline performance
+                    on_new_data: 0.717
+                    on_old_data: 0.913
             """,
             "output": """
             hyperparameters:
                 n_estimators: 200
                 learning_rate: 0.05
                 max_depth: 4
-                min_child_weight: 3
+                min_samples_split: 50
                 subsample: 0.8
-                colsample_bytree: 0.8
-                scale_pos_weight: 2.5
+                validation_fraction: 0.1
+                n_iter_no_change: 10
+                tol: 0.01
             
             new_training_code: |
-                import xgboost as xgb
-                from sklearn.metrics import accuracy_score
                 import yaml
+                import pandas as pd
+                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.metrics import accuracy_score
                 
-                metrics = {
-                    'model_reference': {},
-                    'model_new': {},
-                    'difference_score_averages': {}
+                # Initialize metrics dictionary
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
                 }
                 
-                # Configure XGBoost with optimized parameters for robustness
-                model_reference = xgb.XGBClassifier(
+                # Train new model on combined data
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
+                
+                # Configure model with optimized hyperparameters
+                model_new = GradientBoostingClassifier(
                     n_estimators=200,          # Increased for better convergence
-                    learning_rate=0.05,        # Reduced for finer convergence
+                    learning_rate=0.05,        # Reduced for better generalization
                     max_depth=4,               # Reduced to prevent overfitting
-                    min_child_weight=3,        # Added to ensure robust splits
-                    subsample=0.8,             # Added row sampling for robustness
-                    colsample_bytree=0.8,      # Added column sampling
-                    scale_pos_weight=2.5,      # Added for class imbalance
+                    min_samples_split=50,      # More conservative splits
+                    subsample=0.8,             # Added stochastic sampling
+                    validation_fraction=0.1,   # Added validation monitoring
+                    n_iter_no_change=10,       # Added early stopping
+                    tol=0.01,                 # Convergence tolerance
                     random_state=42
                 )
                 
-                # Train and evaluate reference model
-                model_reference.fit(
-                    X_train_reference, 
-                    y_train_reference,
-                    eval_set=[(X_test_reference, y_test_reference)],
-                    early_stopping_rounds=20,
-                    verbose=False
-                )
+                model_new.fit(X_train, y_train)
                 
-                # [Rest of the evaluation code remains the same...]
+                # Evaluate new model on old test set
+                new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+                print(f'New model trained and evaluated on old distribution: {new_score_old}')
+                model_new_score['on_old_data'] = float(new_score_old)
                 
-            changes_made:
-              - "Doubled n_estimators for better convergence"
-              - "Halved learning rate for finer steps"
-              - "Reduced max_depth to control overfitting"
-              - "Added min_child_weight for robust splits"
-              - "Implemented sampling parameters"
-              - "Added class weight scaling"
+                # Evaluate new model on new test set
+                new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
+                print(f'New model evaluated on new distribution: {new_score_new}')
+                model_new_score['on_new_data'] = float(new_score_new)
+                
+                # Save new model metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             
+            changes_made:
+              - "Increased n_estimators to 200 for better convergence"
+              - "Reduced learning_rate to 0.05 for smoother learning"
+              - "Reduced max_depth to 4 for better generalization"
+              - "Added min_samples_split=50 for robust splits"
+              - "Added subsample=0.8 for stochastic sampling"
+              - "Implemented early stopping mechanism"
+              
             rationale: |
-                Parameter adjustments target:
-                1. Overfitting control through reduced depth and increased min_child_weight
-                2. Better generalization through sampling parameters
-                3. Class imbalance handling with scale_pos_weight
-                4. Finer convergence with lower learning rate and more estimators
-                5. Robustness through row and column sampling
+                Parameter adjustments focus on:
+                1. Better generalization with reduced tree depth and learning rate
+                2. More robust training with conservative splits and subsampling
+                3. Improved convergence monitoring with early stopping
+                4. Better adaptation to distribution shifts through stochastic sampling
+                5. Balance between model capacity and generalization
             """
         }
     ]
@@ -2296,12 +2191,10 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
         example["input"] = textwrap.dedent(example["input"]).strip()
         example["output"] = textwrap.dedent(example["output"]).strip()
 
-    example_prompt = ChatPromptTemplate.from_messages(
-        [
-            ("human", "{input}"),
-            ("ai", "{output}"),
-        ]
-    )
+    example_prompt = ChatPromptTemplate.from_messages([
+        ("human", "{input}"),
+        ("ai", "{output}"),
+    ])
     
     few_shot_prompt = FewShotChatMessagePromptTemplate(
         example_prompt=example_prompt,
@@ -2313,30 +2206,32 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
 
     Context: You have:
     1. Current model code with parameters
-    2. Performance metrics on reference and new data
-    3. Dataset characteristics
-    4. Previous parameter configurations tried
+    2. Previous baseline metrics from working memory
+    3. Current parameter configuration
+    4. Model performance history
 
     Objective: Optimize model hyperparameters to:
     1. Improve model robustness across distributions
-    2. Reduce overfitting
-    3. Handle dataset characteristics (class imbalance, feature types)
-    4. Maintain reasonable training time
-    5. Implement proper evaluation metrics
+    2. Better handle distribution shifts
+    3. Maintain performance on old distribution
+    4. Improve performance on new distribution
 
-    Hyperparameter Tuning Guidelines:
-    1. Focus on parameters that affect model complexity
-    2. Consider dataset size when setting parameters
-    3. Address any class imbalance issues
-    4. Implement cross-validation where appropriate
-    5. Use early stopping when possible
-    6. Balance underfitting vs overfitting
+    Critical Requirements:
+    1. Only save new model metrics to 'slow_graph_metrics.yaml'
+    2. Use metrics format:
+       model_new_score:
+           on_new_data: [score]
+           on_old_data: [score]
+    3. Previous baseline metrics are provided in input
+    4. Only tune parameters available in sklearn models
 
-    Style: Provide clean, well-structured implementation with:
-    1. Clear parameter settings and comments
-    2. Proper evaluation setup
-    3. Performance tracking
-    4. Early stopping where applicable
+    Parameter Tuning Guidelines:
+    1. Balance model capacity with generalization
+    2. Consider regularization parameters
+    3. Implement early stopping when available
+    4. Use validation monitoring
+    5. Consider stochastic variants of parameters
+    6. Don't recompute old model metrics
 
     Response Format: Format your response as YAML with:
 
@@ -2349,7 +2244,13 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
     rationale: |
       [Detailed explanation of parameter choices]
 
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    The implementation must:
+    1. Only compute and save new model metrics
+    2. Use provided baseline metrics for comparison
+    3. Include clear parameter documentation
+    4. Implement proper evaluation
+
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()
@@ -2362,14 +2263,15 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
 
     return final_prompt
 
+
 def prompt_ensemble_method() -> ChatPromptTemplate:
     examples = [
         {
             "input": """
             current_code: |
-                import xgboost as xgb
+                from sklearn.ensemble import GradientBoostingClassifier
                 
-                model = xgb.XGBClassifier(
+                model = GradientBoostingClassifier(
                     n_estimators=200,
                     learning_rate=0.05,
                     max_depth=4,
@@ -2378,149 +2280,118 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
                 model.fit(X_train, y_train)
             
             execution_output: |
-                Model trained and evaluated on the reference distribution: 0.86
-                Reference model evaluated on the new distribution: 0.78
-                Average score of reference model: 0.82
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
             
             strategy_results:
                 model_selection:
                     tried: true
-                    models_tried: ["RandomForest", "XGBoost"]
-                    best_accuracy: 0.82
+                    models_tried: ["RandomForest", "GradientBoosting"]
                 hyperparameter_tuning:
                     tried: true
-                    best_accuracy: 0.82
-            
-            dataset_representation:
-                num_features: 15
-                num_samples: 50000
-                feature_types: 
-                    numerical: 10
-                    categorical: 5
-                target_type: "binary"
-                class_balance: "imbalanced"
+                    best_params:
+                        n_estimators: 200
+                        learning_rate: 0.05
+                        max_depth: 4
+                        
+            previous_metrics:
+                model_old_score:  # Previous baseline performance
+                    on_new_data: 0.717
+                    on_old_data: 0.913
             """,
             "output": """
             ensemble_type: "stacking"
+            estimators:
+              - name: "gradient_boost"
+                class: "GradientBoostingClassifier"
+                params:
+                    n_estimators: 200
+                    learning_rate: 0.05
+                    max_depth: 4
+              - name: "random_forest"
+                class: "RandomForestClassifier"
+                params:
+                    n_estimators: 200
+                    max_depth: 8
+                    class_weight: "balanced"
+                    
             new_training_code: |
-                import xgboost as xgb
-                from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+                import yaml
+                import pandas as pd
+                from sklearn.ensemble import (
+                    RandomForestClassifier, 
+                    GradientBoostingClassifier, 
+                    StackingClassifier
+                )
                 from sklearn.linear_model import LogisticRegression
                 from sklearn.metrics import accuracy_score
-                import yaml
                 
-                metrics = {
-                    'model_reference': {},
-                    'model_new': {},
-                    'difference_score_averages': {}
+                # Initialize metrics dictionary
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
                 }
                 
-                # Define base models with different strengths
-                xgb_model = xgb.XGBClassifier(
-                    n_estimators=200,
-                    learning_rate=0.05,
-                    max_depth=4,
-                    subsample=0.8,
-                    random_state=42
-                )
+                # Train new model on combined data
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
                 
-                rf_model = RandomForestClassifier(
-                    n_estimators=200,
-                    max_depth=8,
-                    min_samples_split=10,
-                    random_state=42
-                )
-                
-                # Create stacking ensemble
+                # Define base estimators
                 estimators = [
-                    ('xgb', xgb_model),
-                    ('rf', rf_model)
+                    ('gb', GradientBoostingClassifier(
+                        n_estimators=200,
+                        learning_rate=0.05,
+                        max_depth=4,
+                        random_state=42
+                    )),
+                    ('rf', RandomForestClassifier(
+                        n_estimators=200,
+                        max_depth=8,
+                        class_weight='balanced',
+                        random_state=42
+                    ))
                 ]
                 
-                model_reference = VotingClassifier(
+                # Create stacking ensemble
+                model_new = StackingClassifier(
                     estimators=estimators,
-                    voting='soft',
-                    weights=[0.6, 0.4]  # Weight towards XGBoost which performed better
+                    final_estimator=LogisticRegression(class_weight='balanced'),
+                    stack_method='predict_proba',
+                    cv=5
                 )
                 
-                # Train and evaluate reference model
-                model_reference.fit(X_train_reference, y_train_reference)
-                
-                # Test reference model
-                ref_score_reference = accuracy_score(
-                    y_test_reference, 
-                    model_reference.predict(X_test_reference)
-                )
-                print(f'Model trained and evaluated on the reference distribution: {ref_score_reference}')
-                metrics['model_reference']['score_reference_data'] = float(ref_score_reference)
-                
-                ref_score_new = accuracy_score(
-                    y_test_new, 
-                    model_reference.predict(X_test_new)
-                )
-                print(f'Reference model evaluated on the new distribution: {ref_score_new}')
-                metrics['model_reference']['score_new_data'] = float(ref_score_new)
-                
-                ref_score_average = (ref_score_reference + ref_score_new) / 2
-                print(f'Average score of reference model: {ref_score_average}')
-                metrics['model_reference']['score_average'] = float(ref_score_average)
-                
-                print("\nTraining new model on combined data...")
-                
-                # Train new model on combined data
-                X_train = pd.concat([X_train_reference, X_train_new])
-                y_train = pd.concat([y_train_reference, y_train_new])
-                
-                model_new = VotingClassifier(
-                    estimators=estimators,
-                    voting='soft',
-                    weights=[0.6, 0.4]
-                )
-                
+                # Train the ensemble
                 model_new.fit(X_train, y_train)
                 
-                # Evaluate new model
-                new_score_reference = accuracy_score(
-                    y_test_reference, 
-                    model_new.predict(X_test_reference)
-                )
-                print(f'New model evaluated on reference distribution: {new_score_reference}')
-                metrics['model_new']['score_reference_data'] = float(new_score_reference)
+                # Evaluate new model on old test set
+                new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+                print(f'New model trained and evaluated on old distribution: {new_score_old}')
+                model_new_score['on_old_data'] = float(new_score_old)
                 
-                new_score_new = accuracy_score(
-                    y_test_new, 
-                    model_new.predict(X_test_new)
-                )
+                # Evaluate new model on new test set
+                new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
                 print(f'New model evaluated on new distribution: {new_score_new}')
-                metrics['model_new']['score_new_data'] = float(new_score_new)
+                model_new_score['on_new_data'] = float(new_score_new)
                 
-                new_score_average = (new_score_reference + new_score_new) / 2
-                print(f'Average score of new model: {new_score_average}')
-                metrics['model_new']['score_average'] = float(new_score_average)
-                
-                score_difference = new_score_average - ref_score_average
-                print(f'\nScore difference: {score_difference}')
-                metrics['difference_score_averages']['score_average'] = float(score_difference)
-                
-                with open('retraining_metrics.yaml', 'w') as f:
-                    yaml.dump(metrics, f)
+                # Save new model metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             
             changes_made:
-              - "Implemented soft voting ensemble"
-              - "Combined XGBoost and RandomForest"
-              - "Weighted models based on previous performance"
-              - "Maintained same evaluation framework"
-              - "Added comprehensive metrics tracking"
-            
+              - "Implemented StackingClassifier with GradientBoosting and RandomForest"
+              - "Added LogisticRegression meta-learner"
+              - "Used predict_proba for probabilistic stacking"
+              - "Added balanced class weights"
+              - "Implemented 5-fold cross-validation"
+              
             rationale: |
-                Ensemble design choices:
-                1. Soft voting chosen for probability-based combination
-                2. XGBoost and RF complement each other:
-                   - XGBoost: Strong with numerical features
-                   - RF: Good at handling categorical features
-                3. Weights favor XGBoost (0.6) based on previous performance
-                4. Both models configured for robustness
-                5. Maintained evaluation framework for consistency
+                Ensemble strategy:
+                1. Combines successful models from previous attempts
+                2. Stacking leverages strengths of different models
+                3. Cross-validation reduces overfitting risk
+                4. Probabilistic stacking for better uncertainty handling
+                5. Balanced weights for better distribution handling
+                6. Logistic meta-learner for interpretable combination
             """
         }
     ]
@@ -2529,12 +2400,10 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
         example["input"] = textwrap.dedent(example["input"]).strip()
         example["output"] = textwrap.dedent(example["output"]).strip()
 
-    example_prompt = ChatPromptTemplate.from_messages(
-        [
-            ("human", "{input}"),
-            ("ai", "{output}"),
-        ]
-    )
+    example_prompt = ChatPromptTemplate.from_messages([
+        ("human", "{input}"),
+        ("ai", "{output}"),
+    ])
     
     few_shot_prompt = FewShotChatMessagePromptTemplate(
         example_prompt=example_prompt,
@@ -2542,41 +2411,44 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
     )
 
     system_prompt = """
-    You are an expert ML engineer specializing in ensemble methods and model combination strategies.
+    You are an expert ML engineer specializing in ensemble methods and model combinations.
 
     Context: You have:
-    1. Current model code and performance
-    2. Results from previous improvement strategies
-    3. Dataset characteristics
-    4. Performance metrics across distributions
+    1. Current model code and configuration
+    2. Previous models and parameters tried
+    3. Previous baseline metrics from working memory
+    4. Strategy results from previous attempts
 
-    Objective: Design and implement an ensemble approach that:
-    1. Combines strengths of multiple models
-    2. Improves generalization across distributions
-    3. Handles dataset characteristics
-    4. Maintains reasonable training time
-    5. Provides robust predictions
+    Objective: Create an ensemble that:
+    1. Combines successful previous approaches
+    2. Improves robustness across distributions
+    3. Maintains performance on old distribution
+    4. Enhances performance on new distribution
 
-    Ensemble Strategy Guidelines:
-    1. Choose appropriate ensemble type:
-       - Voting: Simple combination of predictions
-       - Stacking: Meta-model learns optimal combination
-       - Bagging: Parallel training on bootstrapped samples
-       - Boosting: Sequential training focusing on errors
-    2. Select complementary base models
-    3. Configure appropriate weights/parameters
-    4. Implement proper prediction aggregation
-    5. Maintain evaluation framework
+    Critical Requirements:
+    1. Only save new model metrics to 'slow_graph_metrics.yaml'
+    2. Use metrics format:
+       model_new_score:
+           on_new_data: [score]
+           on_old_data: [score]
+    3. Previous baseline metrics are provided in input
+    4. Only use sklearn ensemble methods
 
-    Style: Provide clean, well-structured implementation with:
-    1. Clear model definitions
-    2. Proper ensemble setup
-    3. Comprehensive evaluation
-    4. Performance tracking
+    Ensemble Guidelines:
+    1. Choose appropriate ensemble type (stacking, voting, bagging)
+    2. Consider diversity in base estimators
+    3. Use cross-validation when possible
+    4. Implement proper weighting strategies
+    5. Consider probabilistic combinations
+    6. Don't recompute old model metrics
 
     Response Format: Format your response as YAML with:
 
     ensemble_type: [type_name]
+    estimators:
+      - name: [estimator_name]
+        class: [estimator_class]
+        params: [parameters]
     new_training_code: |
       [COMPLETE IMPLEMENTATION]
     changes_made:
@@ -2584,7 +2456,13 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
     rationale: |
       [Detailed explanation of ensemble strategy]
 
-    Only provide the YAML-formatted output. Do not include any other explanation or commentary.
+    The implementation must:
+    1. Only compute and save new model metrics
+    2. Use provided baseline metrics for comparison
+    3. Include clear estimator configuration
+    4. Implement proper ensemble evaluation
+
+    Only provide the YAML-formatted output. No additional commentary.
     """
 
     system_prompt = textwrap.dedent(system_prompt).strip()

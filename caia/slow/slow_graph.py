@@ -11,6 +11,7 @@ from langgraph.graph import StateGraph, END
 from IPython.display import Image, display
 from autogen import ConversableAgent
 from autogen.coding import LocalCommandLineCodeExecutor, DockerCommandLineCodeExecutor
+from caia.memory import ModelScore, ImprovementEntry, create_improvement_entry
 
 from caia.memory import WorkingMemory, SemanticMemory, EpisodicMemory 
 from caia.utils import print_function_name
@@ -24,10 +25,11 @@ from caia.prompts import (
     prompt_hyperparameter_tuning,      # New prompt
     prompt_ensemble_method,            # New prompt
     prompt_parse_strategy_output,     # New prompt
-    prompt_summarize_monitoring_report, # New prompt
+    # prompt_summarize_monitoring_report, # New prompt
+    prompt_stats_data,
     prompt_evaluate_change,
-    prompt_fix_code_slow,
-    # prompt_fix_code,
+    # prompt_fix_code_slow,
+    prompt_fix_code,
 )
 
 class SlowGraph:
@@ -104,90 +106,20 @@ class SlowGraph:
             }
         )
 
-    # def build_plan(self):
-    #     """Build the graph structure with nodes and edges."""
-    #     print("\nBuilding Graph Plan...", "-"*50)
-        
-    #     # Add nodes for each step of the process
-    #     self.graph.add_node('distill_memories', self.distill_memories)
-    #     self.graph.add_node('analyze_needs', self.analyze_needs)
-        
-    #     # Strategy nodes
-    #     self.graph.add_node('model_selection', self.generate_model_selection_change)
-    #     self.graph.add_node('hyperparameter_tuning', self.generate_hyperparameter_tuning)
-    #     self.graph.add_node('ensemble_method', self.generate_ensemble_method)
-        
-    #     # Execution and evaluation nodes
-    #     self.graph.add_node('apply_change', self.apply_change)
-    #     self.graph.add_node('evaluate_change', self.evaluate_change)
-        
-    #     print("Added all nodes...")
-        
-    #     # Set entry point
-    #     self.graph.set_entry_point('distill_memories')
-    #     print("Set entry point...")
-        
-    #     # Add edges for the main flow
-    #     self.graph.add_edge('distill_memories', 'analyze_needs')
-        
-    #     # Add conditional edge to route to appropriate strategy
-    #     self.graph.add_conditional_edges(
-    #         'analyze_needs',
-    #         self.route_to_strategy,
-    #         {
-    #             'model_selection': 'model_selection',
-    #             'hyperparameter_tuning': 'hyperparameter_tuning',
-    #             'ensemble_method': 'ensemble_method'
-    #         }
-    #     )
-    #     print("Added strategy routing edges...")
-        
-    #     # Connect all strategy nodes to apply_change
-    #     strategy_nodes = ['model_selection', 'hyperparameter_tuning', 'ensemble_method']
-    #     for node in strategy_nodes:
-    #         self.graph.add_edge(node, 'apply_change')
-    #     print("Connected strategies to apply_change...")
-        
-    #     # Add conditional edge for apply_change
-    #     self.graph.add_conditional_edges(
-    #         'apply_change',
-    #         self.should_evaluate_code,
-    #         {
-    #             'evaluate': 'evaluate_change',
-    #             'retry': 'analyze_needs'
-    #         }
-    #     )
-    #     print("Added apply_change edges...")
-        
-    #     # Create a wrapper for should_continue_improving that ensures it's called
-    #     def should_continue_wrapper(state):
-    #         print("\nCalling should_continue_improving wrapper...")
-    #         result = self.should_continue_improving(state)
-    #         print(f"should_continue_improving returned: {result}")
-    #         return result
-        
-    #     # Add conditional edge for evaluate_change with wrapped function
-    #     print("Adding evaluate_change conditional edges...")
-    #     self.graph.add_conditional_edges(
-    #         'evaluate_change',
-    #         should_continue_wrapper,  # Use wrapped version
-    #         {
-    #             'continue': 'analyze_needs',
-    #             'end': END
-    #         }
-    #     )
-    #     print("Added evaluate_change edges...")
-    #     print("Graph build complete!", "-"*50)
 
 
     def initialize_generations(self) -> Dict[str, Any]:
         """Initialize the generations dictionary with strategy tracking."""
         return {
+            # Core insights and changes
             'distilled_insights': '',
             'tiny_change': '',
+            
+            # Execution tracking
             'execution_output': '',
             'execution_success': False,
-            'new_accuracy': 0.0,
+            
+            # Strategy tracking
             'current_strategy': '',
             'strategy_analysis': {
                 'recommended_strategy': '',
@@ -199,207 +131,115 @@ class SlowGraph:
             'strategy_results': {
                 'model_selection': {
                     'tried': False,
-                    'best_accuracy': 0.0,
                     'models_tried': []
                 },
                 'hyperparameter_tuning': {
                     'tried': False,
-                    'best_params': {},
-                    'best_accuracy': 0.0
+                    'best_params': {}
                 },
                 'ensemble_method': {
                     'tried': False,
-                    'best_ensemble': '',
-                    'best_accuracy': 0.0
+                    'best_ensemble': ''
                 }
             }
         }
-    def distill_memories(self, state: WorkingMemory) -> WorkingMemory:
-        """Distill insights from semantic and episodic memories.
-        
-        Args:
-            state: Current working memory state
-            
-        Returns:
-            Updated working memory with distilled insights
-        """
-        # Ensure generations dictionary is initialized
-        # if 'generations' not in state:
-        state['generations_slow_graph'] = self.initialize_generations()
-
-        # Get model documentation summary
+    
+    def stats_data(self, state: WorkingMemory) -> dict:
+        """Generate and execute dataset statistics code"""
         semantic_memory = state['semantic_memory']
-        doc_prompt = prompt_summarize_model_docs()
-        doc_chain = doc_prompt | self.llm
-        model_params_summary = doc_chain.invoke({'input': semantic_memory.model_object.__doc__}).content
+        episodic_memory = state['episodic_memory'][-1]
         
-        # Summarize monitoring report
-        # monitoring_prompt = prompt_summarize_monitoring_report()
-        # monitoring_chain = monitoring_prompt | self.llm
-        # monitoring_summary = monitoring_chain.invoke(
-        #     {'input': yaml.dump(state['monitoring_report'])}
-        # ).content
-        
-        # Prepare semantic memory
-        semantic_memory_dict = {
-            'old_training_code': semantic_memory.model_code,
-            'model_documentation': model_params_summary,
-            'dataset_description': semantic_memory.reference_dataset.description
-        }
-
-        # Get episodic memory
-        episodic_memory = state['episodic_memory'][-1].quick_insight
-        
-        # Create the prompt for the LLM
-        prompt = prompt_distill_memories()
-        
-        # Prepare the input in YAML format
-        yaml_content = {
-            'semantic_memory': str(semantic_memory_dict),
-            'episodic_memory': str(episodic_memory),
-            # 'episodic_memory': str(episodic_memory),
-            # 'monitoring_summary': monitoring_summary
+        input_content = {
+            "old": {
+                "description": semantic_memory.dataset_old.description,
+                "X_train": semantic_memory.dataset_old.X_train,
+                "y_train": semantic_memory.dataset_old.y_train
+            },
+            "new": {
+                "description": episodic_memory.new_dataset.description,
+                "X_train": episodic_memory.new_dataset.X_train,
+                "y_train": episodic_memory.new_dataset.y_train
+            }
         }
         
-        # Invoke the LLM with yaml content
+        # Generate analysis code
+        prompt = prompt_stats_data()
         chain = prompt | self.llm
+        code_output = chain.invoke({'input': yaml.dump(input_content)}).content
+        
+        # Parse the YAML output to extract the Python code
+        try:
+            parsed_yaml = yaml.safe_load(code_output)
+            stats_code = parsed_yaml['stats_code']
+        except Exception as e:
+            print(f"Error parsing YAML output: {str(e)}")
+            return {}
+        
+        # Execute the extracted Python code
+        executor = LocalCommandLineCodeExecutor(timeout=20)
+        code_executor_agent = ConversableAgent(
+            "stats_agent",
+            llm_config=False,
+            code_execution_config={"executor": executor}
+        )
+        
+        
+        # Execute the generated code
+        execution_output = code_executor_agent.generate_reply(
+            messages=[{"role": "user", "content": f"```python\n{stats_code}\n```"}]
+        )
+        
+        print(execution_output)
+
+        # Read the YAML file from disk
+        try:
+            with open('dataset_stats.yaml', 'r') as f:
+                results = yaml.safe_load(f)
+            return results
+        except Exception as e:
+            print(f"Error reading stats YAML file: {str(e)}")
+            return {}
+
+    def distill_memories(self, state: WorkingMemory) -> WorkingMemory:
+        """Updated distill_memories to focus on core model performance analysis"""
+        state['generations_slow_graph'] = self.initialize_generations()
+        
+        # Prepare semantic memory inputs
+        semantic_memory = state['semantic_memory']
+        model_params_summary = (prompt_summarize_model_docs() | self.llm).invoke(
+            {'input': semantic_memory.model_object.__doc__}
+        ).content
+        
+        # Build focused input YAML with only required components
+        yaml_content = {
+            'execution_output': state['episodic_memory'][-1].quick_insight['execution_output'],
+            'model_code': semantic_memory.model_code
+        }
+        
+        # Generate insights with core data
+        chain = prompt_distill_memories() | self.llm
         output = chain.invoke({'input': yaml.dump(yaml_content)}).content
         
-        # Update the state with the distilled insights
-        if 'generations_slow_graph' not in state:
-            state['generations_slow_graph'] = {}
-        state['generations_slow_graph']['distilled_insights'] = output
+        # Store structured results
+        try:
+            insights = yaml.safe_load(output)
+        except yaml.YAMLError:
+            insights = {'error': 'Failed to parse insights YAML'}
+        
+        state['generations_slow_graph'].update({
+            'distilled_insights': insights,
+            'model_metadata': {
+                'params_summary': model_params_summary,
+                'data_paths': {
+                    'old_data': semantic_memory.dataset_old.X_train,
+                    'new_data': state['episodic_memory'][-1].dataset_new.X_train
+                }
+            }
+        })
         
         return state
-    
-    # def analyze_needs(self, state: WorkingMemory) -> WorkingMemory:
-    #     """Analyzes current model performance and determines next best strategy."""
-        
-    #     # Extract key metrics
-    #     execution_output = state['generations_slow_graph'].get('execution_output', '')
-    #     current_accuracy = state['generations_slow_graph'].get('new_accuracy', 0.0)
-    #     previous_accuracy = state.get('previous_accuracy', 0.0)
-        
-    #     # Extract accuracy values from execution output
-    #     ref_accuracy = 0.0
-    #     new_accuracy = 0.0
-    #     combined_accuracy = 0.0
-        
-    #     try:
-    #         for line in execution_output.split('\n'):
-    #             if 'reference distribution' in line:
-    #                 ref_accuracy = float(line.split(':')[-1].strip())
-    #             elif 'new distribution' in line:
-    #                 new_accuracy = float(line.split(':')[-1].strip())
-    #             elif 'average score' in line:
-    #                 combined_accuracy = float(line.split(':')[-1].strip())
-    #     except:
-    #         pass
-        
-    #     # Prepare concise input YAML
-    #     yaml_content = {
-    #         "current_metrics": {
-    #             "reference_accuracy": ref_accuracy,
-    #             "new_data_accuracy": new_accuracy,
-    #             "combined_accuracy": combined_accuracy,
-    #             "accuracy_change": current_accuracy - previous_accuracy if current_accuracy else 0
-    #         },
-    #         "strategies_tried": []
-    #     }
-        
-    #     # Add strategy history
-    #     for strategy, results in state['generations_slow_graph'].get('strategy_results', {}).items():
-    #         if results.get('tried', False):
-    #             yaml_content["strategies_tried"].append({
-    #                 strategy: {
-    #                     "models": results.get('models_tried', []) if strategy == 'model_selection' else None,
-    #                     "best_accuracy": results.get('best_accuracy', 0.0)
-    #                 }
-    #             })
-        
-    #     # Get analysis from LLM
-    #     prompt = prompt_analyze_improvement_needs()
-    #     chain = prompt | self.llm
-    #     analysis = chain.invoke({'input': yaml.dump(yaml_content)}).content
-        
-    #     try:
-    #         # Parse YAML output
-    #         analysis_dict = yaml.safe_load(analysis)
-            
-    #         # Update state with analysis results
-    #         state['generations_slow_graph'].update({
-    #             'current_strategy': analysis_dict.get('recommended_strategy', 'model_selection'),
-    #             'strategy_analysis': {
-    #                 'recommended_strategy': analysis_dict.get('recommended_strategy', ''),
-    #                 'reasoning': analysis_dict.get('reasoning', ''),
-    #                 'performance_gaps': analysis_dict.get('performance_gaps', []),
-    #                 'next_steps': analysis_dict.get('next_steps', [])
-    #             }
-    #         })
-            
-    #     except yaml.YAMLError as e:
-    #         print(f"Error parsing analysis output: {e}")
-    #         state['generations_slow_graph'].update({
-    #             'current_strategy': 'model_selection',
-    #             'strategy_analysis': {
-    #                 'recommended_strategy': 'model_selection',
-    #                 'reasoning': 'Failed to parse analysis, defaulting to model selection',
-    #                 'performance_gaps': [],
-    #                 'next_steps': ['Try different model architecture']
-    #             }
-    #         })
-        
-    #     # Print analysis for debugging
-    #     print("\nStrategy Analysis:", "-"*50)
-    #     print(yaml.dump(state['generations_slow_graph']['strategy_analysis'], default_flow_style=False))
-        
-    #     return state
 
-    # def analyze_needs(self, state: WorkingMemory) -> WorkingMemory:
-    #     """Analyzes current model performance and determines next best strategy.
-        
-    #     Args:
-    #         state: Current working memory state
-            
-    #     Returns:
-    #         Updated working memory with analysis results
-    #     """
-    #     # Ensure generations dictionary is initialized
-    #     # if 'generations' not in state:
-    #     #     state['generations_slow_graph'] = self.initialize_generations()
-            
-    #     execution_output = state['generations_slow_graph'].get('execution_output', '')
-    #     strategy_results = state['generations_slow_graph'].get('strategy_results', {})
-        
-    #     # Create prompt for analysis
-    #     prompt = prompt_analyze_improvement_needs()
-    #     chain = prompt | self.llm
-        
-    #     # Prepare input YAML
-    #     yaml_content = {
-    #         "current_performance": execution_output,
-    #         "improvement_history": state['improvement_history'],
-    #         "strategy_results": strategy_results,
-    #         # "threshold": state['threshold'],
-    #         # "initial_distilled_memory": state['monitoring_report']
-    #         # "monitoring_report": state['monitoring_report']
-    #     }
-        
-    #     # Get analysis from LLM with properly formatted input
-    #     analysis = chain.invoke({'input': yaml.dump(yaml_content)}).content
-        
-    #     # Parse YAML output
-    #     analysis_dict = yaml.safe_load(analysis)
-        
-    #     # Update generations with analysis
-    #     # new_generations = state['generations_slow_graph'].copy()
-    #     state['generations_slow_graph'].update({
-    #         'current_strategy': analysis_dict['recommended_strategy'],
-    #         'strategy_analysis': analysis_dict
-    #     })
-    #     # state['generations_slow_graph'] = new_generations
-    #     return state
-    #     # return {**state, 'generations': new_generations}
+
 
     def analyze_needs(self, state: WorkingMemory) -> WorkingMemory:
         """Analyzes current model performance and determines next best strategy."""
@@ -496,154 +336,169 @@ class SlowGraph:
     
     def generate_model_selection_change(self, state: WorkingMemory) -> WorkingMemory:
         """Generates changes focused on trying different model architectures."""
-        strategy_results = state['generations_slow_graph'].get('strategy_results', {})
-        models_tried = strategy_results.get('model_selection', {}).get('models_tried', [])
-        
-        prompt = prompt_model_selection_change()
-        chain = prompt | self.llm
-        
-        # Prepare input YAML
-        yaml_content = {
-            "current_code": state['semantic_memory'].model_code,
-            "execution_output": state['generations_slow_graph'].get('execution_output', ''),
-            "models_tried": models_tried,
-            # "dataset_representation": state['dataset_representation']
-        }
-        
-        # Get model selection changes from LLM with properly formatted input
-        change_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
-        
-        # Store the raw model selection output
-        state['generations_slow_graph']['tiny_change'] = change_output
-        
-        # Parse YAML output for strategy results update
         try:
-            change_dict = yaml.safe_load(change_output)
-            # Update strategy results if valid YAML
-            if isinstance(change_dict, dict) and 'model_name' in change_dict:
-                new_generations = state['generations_slow_graph'].copy()
-                new_generations['strategy_results']['model_selection'] = {
-                    'tried': True,
-                    'models_tried': models_tried + [change_dict['model_name']],
-                    'best_accuracy': max(
-                        strategy_results.get('model_selection', {}).get('best_accuracy', 0),
-                        state['generations_slow_graph'].get('new_accuracy', 0)
-                    )
-                }
-                state['generations_slow_graph'].update(new_generations)
-        except yaml.YAMLError:
-            # If YAML parsing fails, continue with just the raw output
-            pass
-
+            # Get current strategy results
+            strategy_results = state['generations_slow_graph'].get('strategy_results', {})
+            models_tried = strategy_results.get('model_selection', {}).get('models_tried', [])
+            
+            # Get previous metrics from improvement history
+            prev_metrics = None
+            if state.get('improvement_history'):
+                prev_metrics = state['improvement_history'][-1]['metrics']
+            
+            prompt = prompt_model_selection_change()
+            chain = prompt | self.llm
+            
+            # Prepare input YAML
+            yaml_content = {
+                "current_code": state['semantic_memory'].model_code,
+                "execution_output": state['generations_slow_graph'].get('execution_output', ''),
+                "models_tried": models_tried,
+                "previous_performance": prev_metrics if prev_metrics else {}
+            }
+            
+            # Get model selection changes
+            change_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
+            
+            # Store the raw output
+            state['generations_slow_graph']['tiny_change'] = change_output
+            
+            # Parse YAML output for strategy results update
+            try:
+                change_dict = yaml.safe_load(change_output)
+                if isinstance(change_dict, dict):
+                    # Update strategy results with new model information
+                    new_generations = state['generations_slow_graph'].copy()
+                    new_generations['strategy_results']['model_selection'] = {
+                        'tried': True,
+                        'models_tried': models_tried + [change_dict.get('model_name', 'unknown')],
+                        'latest_changes': {
+                            'model_name': change_dict.get('model_name', ''),
+                            'parameters': change_dict.get('parameters', {}),
+                            'rationale': change_dict.get('rationale', '')
+                        }
+                    }
+                    state['generations_slow_graph'].update(new_generations)
+                    
+            except yaml.YAMLError as e:
+                print(f"Error parsing model selection output: {str(e)}")
+                
+        except Exception as e:
+            print(f"Error in generate_model_selection_change: {str(e)}")
+            state['generations_slow_graph']['error'] = str(e)
+        
         return state
-        # return {**state, 'generations': new_generations}
+
 
     def generate_hyperparameter_tuning(self, state: WorkingMemory) -> WorkingMemory:
         """Generates hyperparameter optimization changes."""
-        strategy_results = state['generations_slow_graph'].get('strategy_results', {})
-        current_params = strategy_results.get('hyperparameter_tuning', {}).get('best_params', {})
-        
-        prompt = prompt_hyperparameter_tuning()
-        chain = prompt | self.llm
-        
-        # Prepare input YAML
-        yaml_content = {
-            "current_code": state['semantic_memory'].model_code,
-            "execution_output": state['generations_slow_graph'].get('execution_output', ''),
-            "current_params": current_params,
-            # "dataset_representation": state['dataset_representation']
-        }
-        
-        # Properly format input for the chain with the 'input' key
-        change_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
-        
         try:
-            # Parse YAML output
-            change_dict = yaml.safe_load(change_output)
+            # Get current strategy results
+            strategy_results = state['generations_slow_graph'].get('strategy_results', {})
+            current_params = strategy_results.get('hyperparameter_tuning', {}).get('best_params', {})
             
-            # Update generations
-            new_generations = state['generations_slow_graph'].copy()
+            # Get previous metrics from improvement history
+            prev_metrics = None
+            if state.get('improvement_history'):
+                prev_metrics = state['improvement_history'][-1]['metrics']
             
-            # Store the raw hyperparameter tuning output
+            prompt = prompt_hyperparameter_tuning()
+            chain = prompt | self.llm
+            
+            # Prepare input YAML
+            yaml_content = {
+                "current_code": state['semantic_memory'].model_code,
+                "execution_output": state['generations_slow_graph'].get('execution_output', ''),
+                "current_params": current_params,
+                "previous_performance": prev_metrics if prev_metrics else {}
+            }
+            
+            # Get hyperparameter tuning changes
+            change_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
+            
+            # Store the raw output
             state['generations_slow_graph']['tiny_change'] = change_output
             
-            if isinstance(change_dict, dict):
-                # Update strategy results with hyperparameter information
-                new_generations['strategy_results']['hyperparameter_tuning'] = {
-                    'tried': True,
-                    'best_params': change_dict.get('hyperparameters', {}),
-                    'best_accuracy': max(
-                        strategy_results.get('hyperparameter_tuning', {}).get('best_accuracy', 0),
-                        state['generations_slow_graph'].get('new_accuracy', 0)
-                    )
-                }
-                state['generations_slow_graph'].update(new_generations)
+            try:
+                # Parse YAML output
+                change_dict = yaml.safe_load(change_output)
                 
-        except yaml.YAMLError as e:
-            print(f"Error parsing YAML: {str(e)}")
-            # If YAML parsing fails, still store the raw output
-            state['generations_slow_graph']['tiny_change'] = change_output
-
+                if isinstance(change_dict, dict):
+                    new_generations = state['generations_slow_graph'].copy()
+                    new_generations['strategy_results']['hyperparameter_tuning'] = {
+                        'tried': True,
+                        'best_params': change_dict.get('hyperparameters', {}),
+                        'latest_changes': {
+                            'parameters': change_dict.get('hyperparameters', {}),
+                            'rationale': change_dict.get('rationale', '')
+                        }
+                    }
+                    state['generations_slow_graph'].update(new_generations)
+                    
+            except yaml.YAMLError as e:
+                print(f"Error parsing hyperparameter tuning output: {str(e)}")
+                
+        except Exception as e:
+            print(f"Error in generate_hyperparameter_tuning: {str(e)}")
+            state['generations_slow_graph']['error'] = str(e)
+        
         return state
 
-        # return {**state, 'generations': new_generations}
 
     def generate_ensemble_method(self, state: WorkingMemory) -> WorkingMemory:
-        """Generates ensemble-based improvements.
-        
-        Args:
-            state: Current working memory state
-            
-        Returns:
-            Updated working memory with ensemble method changes
-        """
-        strategy_results = state['generations_slow_graph'].get('strategy_results', {})
-        
-        prompt = prompt_ensemble_method()
-        chain = prompt | self.llm
-        
-        # Prepare input YAML
-        yaml_content = {
-            "current_code": state['semantic_memory'].model_code,
-            "execution_output": state['generations_slow_graph'].get('execution_output', ''),
-            "strategy_results": strategy_results,
-            # "dataset_representation": state['dataset_representation']
-        }
-        
-        # Properly format input for the chain with the 'input' key
-        change_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
-        
+        """Generates ensemble-based improvements."""
         try:
-            # Parse YAML output
-            change_dict = yaml.safe_load(change_output)
+            # Get current strategy results
+            strategy_results = state['generations_slow_graph'].get('strategy_results', {})
             
-            # Store the raw ensemble method output
+            # Get previous metrics from improvement history
+            prev_metrics = None
+            if state.get('improvement_history'):
+                prev_metrics = state['improvement_history'][-1]['metrics']
+            
+            prompt = prompt_ensemble_method()
+            chain = prompt | self.llm
+            
+            # Prepare input YAML
+            yaml_content = {
+                "current_code": state['semantic_memory'].model_code,
+                "execution_output": state['generations_slow_graph'].get('execution_output', ''),
+                "strategy_results": strategy_results,
+                "previous_performance": prev_metrics if prev_metrics else {}
+            }
+            
+            # Get ensemble method changes
+            change_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
+            
+            # Store the raw output
             state['generations_slow_graph']['tiny_change'] = change_output
             
-            if isinstance(change_dict, dict):
-                if 'new_training_code' in change_dict:
-                    # Update strategy results with ensemble information
+            try:
+                # Parse YAML output
+                change_dict = yaml.safe_load(change_output)
+                
+                if isinstance(change_dict, dict):
                     new_generations = state['generations_slow_graph'].copy()
                     new_generations['strategy_results']['ensemble_method'] = {
                         'tried': True,
                         'best_ensemble': change_dict.get('ensemble_type', 'unknown'),
-                        'best_accuracy': max(
-                            strategy_results.get('ensemble_method', {}).get('best_accuracy', 0),
-                            state['generations_slow_graph'].get('new_accuracy', 0)
-                        )
+                        'latest_changes': {
+                            'ensemble_type': change_dict.get('ensemble_type', ''),
+                            'estimators': change_dict.get('estimators', []),
+                            'rationale': change_dict.get('rationale', '')
+                        }
                     }
                     state['generations_slow_graph'].update(new_generations)
-            else:
-                print("Warning: Invalid YAML structure in ensemble method output")
+                    
+            except yaml.YAMLError as e:
+                print(f"Error parsing ensemble method output: {str(e)}")
                 
-        except yaml.YAMLError as e:
-            print(f"Error parsing YAML in ensemble method: {str(e)}")
-            # If YAML parsing fails, still store the raw output
-            state['generations_slow_graph']['tiny_change'] = change_output
-
-        return state
+        except Exception as e:
+            print(f"Error in generate_ensemble_method: {str(e)}")
+            state['generations_slow_graph']['error'] = str(e)
         
-        # return {**state, 'generations': new_generations}
+        return state
+
 
     def route_to_strategy(self, state: WorkingMemory) -> str:
         """Routes to appropriate strategy node based on analysis.
@@ -667,60 +522,19 @@ class SlowGraph:
         """
         return 'evaluate' if state['generations_slow_graph'].get('execution_success', False) else 'retry'
 
-    # def should_continue_improving(self, state: WorkingMemory) -> str:
-    #     """Determine if improvement process should continue.
-        
-    #     Args:
-    #         state: Current working memory state
-            
-    #     Returns:
-    #         'continue' if more improvements needed, 'end' otherwise
-    #     """
-    #     if not state['improvement_history']:
-    #         return 'continue'
-            
-    #     latest_improvement = state['improvement_history'][-1]
-    #     iteration_count = len(state['improvement_history'])
-        
-    #     # Get strategy results
-    #     strategy_results = state['generations_slow_graph'].get('strategy_results', {})
-    #     strategies_tried = [
-    #         strategy for strategy, result in strategy_results.items() 
-    #         if result.get('tried', False)
-    #     ]
-        
-    #     # Stop conditions:
-    #     # 1. Reached max iterations (10)
-    #     # 2. Found significant improvement (> threshold)
-    #     # 3. Tried all strategies with no improvement
-    #     # 4. Multiple failed attempts in a row (3)
-    #     if (
-    #         iteration_count >= 10 or
-    #         latest_improvement['accuracy_change'] > state['threshold'] or
-    #         len(strategies_tried) >= 3 or  # We implemented 3 strategies
-    #         (iteration_count > 2 and all(
-    #             h['evaluation']['recommendation']['action'] == 'reject' 
-    #             for h in state['improvement_history'][-3:]
-    #         ))
-    #     ):
-    #         return 'end'
-            
-    #     return 'continue'
 
     def should_continue_improving(self, state: WorkingMemory) -> str:
         """Determine if improvement process should continue."""
-
-        print("\nshould_continue_improving called!", "-"*50)
-        print("State keys:", state.keys())
+        print("\nEvaluating improvement continuation...", "-"*50)
         
-        if not state.get('improvement_history'):
+        # Get improvement history
+        improvement_history = state.get('improvement_history', [])
+        if not improvement_history:
             print("No improvement history found, continuing...")
             return 'continue'
         
         # Get latest improvement info
-        improvement_history = state['improvement_history']
         latest_improvement = improvement_history[-1]
-        print(f"\nLatest improvement:", latest_improvement.keys())
         
         # Get strategy information
         strategy_results = state['generations_slow_graph'].get('strategy_results', {})
@@ -728,367 +542,537 @@ class SlowGraph:
             strategy for strategy, result in strategy_results.items() 
             if result.get('tried', False)
         ]
-        print(f"Strategies tried: {strategies_tried}")
         
-        # Get evaluation details
-        latest_eval = latest_improvement.get('evaluation', {}).get('evaluation', {})
-        recommendation = latest_eval.get('recommendation', {})
-        next_steps = latest_eval.get('next_steps', [])
-        print(f"Recommendation: {recommendation.get('action')}")
-        print(f"Next steps: {next_steps}")
+        # Get evaluation details from latest improvement
+        evaluation = latest_improvement.get('evaluation', {})
+        recommendation = evaluation.get('recommendation', {})
+        next_steps = evaluation.get('next_steps', [])
         
-        # Check conditions
-        should_stop = (
-            len(improvement_history) >= 10 or  # Max iterations
-            len(strategies_tried) >= 3  # All strategies tried
+        # Get performance metrics
+        improvements = latest_improvement.get('improvements', {})
+        metrics = latest_improvement.get('metrics', {})
+        
+        # Log decision factors
+        self._log_improvement_decision_factors(
+            strategies_tried=strategies_tried,
+            latest_metrics=metrics,
+            improvements=improvements,
+            recommendation=recommendation
         )
         
-        should_continue = (
-            len(strategies_tried) < 3 or  # Still have untried strategies
-            (recommendation.get('action') == 'accept' and  # Current change accepted
-            len(next_steps) > 0)  # Have next steps
-        )
+        # Check stopping conditions
+        max_iterations_reached = len(improvement_history) >= 10
+        all_strategies_tried = len(strategies_tried) >= 3
+        no_improvement = self._check_no_improvement(improvement_history)
         
-        print(f"Should stop: {should_stop}")
-        print(f"Should continue: {should_continue}")
+        if max_iterations_reached:
+            print("Maximum iterations reached.")
+            return 'end'
         
-        decision = 'continue' if (should_continue and not should_stop) else 'end'
-        print(f"Final decision: {decision}")
-        return decision
+        if all_strategies_tried and no_improvement:
+            print("All strategies tried without significant improvement.")
+            return 'end'
+        
+        if recommendation.get('action') == 'accept':
+            if not next_steps or all_strategies_tried:
+                print("Improvement accepted with no further steps needed.")
+                return 'end'
+            print("Improvement accepted but further steps available.")
+            return 'continue'
+        
+        if len(strategies_tried) < 3:
+            print("Still have untried strategies available.")
+            return 'continue'
+        
+        print("No clear improvement path found.")
+        return 'end'
  
+    def _check_no_improvement(self, improvement_history: List[Dict]) -> bool:
+        """Check if recent improvements show no progress."""
+        if len(improvement_history) < 2:
+            return False
+        
+        # Look at last 3 improvements or all if less
+        recent_improvements = improvement_history[-3:]
+        threshold = 0.01  # 1% improvement threshold
+        
+        for imp in recent_improvements:
+            improvements = imp.get('improvements', {})
+            if any(abs(v) > threshold for v in improvements.values()):
+                return False
+        
+        return True
+
+    def _log_improvement_decision_factors(
+        self,
+        strategies_tried: List[str],
+        latest_metrics: Dict,
+        improvements: Dict,
+        recommendation: Dict
+    ):
+        """Log factors influencing the improvement decision."""
+        print("\nImprovement Decision Factors:", "-"*50)
+        print(f"Strategies Tried: {', '.join(strategies_tried)}")
+        print("\nLatest Performance:")
+        print(f"  Old Distribution: {latest_metrics.get('new_model', {}).get('on_old_data', 0):.4f}")
+        print(f"  New Distribution: {latest_metrics.get('new_model', {}).get('on_new_data', 0):.4f}")
+        print("\nImprovements:")
+        print(f"  Old Distribution: {improvements.get('old_distribution', 0):.4f}")
+        print(f"  New Distribution: {improvements.get('new_distribution', 0):.4f}")
+        print(f"\nRecommendation: {recommendation.get('action', 'unknown')}")
+        print(f"Confidence: {recommendation.get('confidence', 'unknown')}")
+
 
     def apply_change(self, state: WorkingMemory) -> WorkingMemory:
         """Apply the generated change and execute the code."""
         try:
-            # Get the current code with tiny change
-            current_code_yaml = state['generations_slow_graph']['tiny_change']
-            
-            # Try to parse as YAML first
-            try:
-                parsed_yaml = yaml.safe_load(current_code_yaml)
-                if isinstance(parsed_yaml, dict) and 'new_training_code' in parsed_yaml:
-                    current_code = parsed_yaml['new_training_code']
-                else:
-                    current_code = current_code_yaml
-            except yaml.YAMLError:
-                current_code = current_code_yaml
-
-            max_retries = 2
+            # Extract and parse code from tiny_change
+            current_code = self._extract_code(state['generations_slow_graph']['tiny_change'])
+            max_retries = 4
             current_try = 0
             
             while current_try < max_retries:
-                # Attempt to execute the code
-                wrapped_code = f"```python\n{current_code}\n```"
-                executor = DockerCommandLineCodeExecutor(
-                    image="agent-env:latest",
-                    timeout=10,
-                    work_dir=".",
-                )
+                # Execute the code
+                execution_output = self._execute_code(current_code)
                 
-                code_executor_agent = ConversableAgent(
-                    "code_executor_agent",
-                    llm_config=False,
-                    code_execution_config={"executor": executor},
-                    human_input_mode="NEVER",
-                )
-                
-                execution_output = code_executor_agent.generate_reply(
-                    messages=[{"role": "user", "content": wrapped_code}]
-                )
-                
-                # If execution succeeds, break the loop
-                if not any(err in execution_output.lower() for err in ['error', 'failed', 'TypeError', 'ValueError', 'NameError']):
+                # Check for execution errors
+                if not self._has_execution_errors(execution_output):
                     break
                     
-                # If execution fails and we have retries left
+                # Handle code fixing if needed
                 if current_try < max_retries - 1:
-                    # Prepare input for code fixing
-                    yaml_content = {
-                        "current_code": current_code,
-                        "error_output": execution_output
-                    }
-                    
-                    # Create fix code prompt and get fixed code
-                    prompt = prompt_fix_code()
-                    chain = prompt | self.llm
-                    fixed_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
-                    
-                    try:
-                        fixed_dict = yaml.safe_load(fixed_output)
-                        if isinstance(fixed_dict, dict) and 'fixed_code' in fixed_dict:
-                            current_code = fixed_dict['fixed_code']
-                            # Store validation steps for debugging
-                            if 'validation_steps' in fixed_dict:
-                                state['generations_slow_graph']['validation_steps'] = fixed_dict['validation_steps']
-                    except yaml.YAMLError:
-                        print("Failed to parse fixed code output")
-                        break
-                        
+                    current_code = self._fix_code(current_code, execution_output, state)
+                
                 current_try += 1
             
-            # Store final execution results
-            print("Execution Output:", "-"*100)
-            print(execution_output)
-            state['generations_slow_graph']['execution_output'] = execution_output
+            # Process execution results and update improvement history
+            state = self._process_execution_results(state, execution_output, current_code)
             
-            # Check if execution was successful
-            success_indicators = [
-                "succeeded",
-                "new model evaluated",
-                "accuracy:",
-                "score:",
-                "completed successfully"
-            ]
-            
-            if any(indicator in execution_output.lower() for indicator in success_indicators):
-                state['generations_slow_graph']['execution_success'] = True
-                
-                # Extract accuracy using various patterns
-                accuracy_patterns = [
-                    r"New model evaluated on new distribution: ([\d.]+)",
-                    r"New Model Accuracy: ([\d.]+)",
-                    r"Final accuracy: ([\d.]+)",
-                    r"Test accuracy: ([\d.]+)",
-                    r"Score: ([\d.]+)",
-                    r"Accuracy: ([\d.]+)"
-                ]
-                
-                for pattern in accuracy_patterns:
-                    try:
-                        match = re.search(pattern, execution_output)
-                        if match:
-                            accuracy = float(match.group(1))
-                            state['generations_slow_graph']['new_accuracy'] = accuracy
-                            break
-                    except (AttributeError, ValueError):
-                        continue
-                
-                if 'new_accuracy' not in state['generations_slow_graph']:
-                    state['generations_slow_graph']['execution_success'] = False
-                    
-            else:
-                state['generations_slow_graph']['execution_success'] = False
-                
         except Exception as e:
             print(f"Error in apply_change: {str(e)}")
-            state['generations_slow_graph']['execution_success'] = False
-            state['generations_slow_graph']['execution_output'] = str(e)
+            state['generations_slow_graph'].update({
+                'execution_success': False,
+                'execution_output': str(e)
+            })
         
         return state
 
-    def evaluate_change(self, state: WorkingMemory) -> WorkingMemory:
-        """Evaluate the applied change and update improvement history."""
-        print("\nEntering evaluate_change...", "-"*50)
-        
-        # Get current accuracy from execution output
-        execution_output = state['generations_slow_graph']['execution_output']
-        current_accuracy = None
-        
-        # Try to extract new model accuracy
+    def _extract_code(self, code_yaml: str) -> str:
+        """Extract code from YAML structure."""
         try:
-            for line in execution_output.split('\n'):
-                if 'New model evaluated on new distribution:' in line:
-                    current_accuracy = float(line.split(':')[1].strip())
-                    break
-        except:
-            current_accuracy = state['generations_slow_graph'].get('new_accuracy', 0)
+            parsed_yaml = yaml.safe_load(code_yaml)
+            if isinstance(parsed_yaml, dict) and 'new_training_code' in parsed_yaml:
+                return parsed_yaml['new_training_code']
+            return code_yaml
+        except yaml.YAMLError:
+            return code_yaml
+
+    def _execute_code(self, code: str) -> str:
+        """Execute code using the code executor."""
+        wrapped_code = f"```python\n{code}\n```"
+        executor = LocalCommandLineCodeExecutor(
+            timeout=10,
+            work_dir=".",
+        )
+        code_executor_agent = ConversableAgent(
+            "code_executor_agent",
+            llm_config=False,
+            code_execution_config={"executor": executor},
+            human_input_mode="NEVER",
+        )
+        return code_executor_agent.generate_reply(
+            messages=[{"role": "user", "content": wrapped_code}]
+        )
+
+    def _has_execution_errors(self, output: str) -> bool:
+        """Check if execution output contains errors."""
+        error_indicators = ['error', 'failed', 'TypeError', 'ValueError', 'NameError']
+        return any(err in output.lower() for err in error_indicators)
+
+    def _fix_code(self, code: str, error_output: str, state: WorkingMemory) -> str:
+        """Fix code using the fix code prompt."""
+        yaml_content = {
+            "current_code": code,
+            "error_output": error_output
+        }
         
-        # Get previous accuracy - from either improvement history or semantic memory
-        if state['improvement_history']:
-            previous_metrics = state['improvement_history'][-1].get('evaluation', {}).get('evaluation', {}).get('metrics', {})
-            previous_accuracy = previous_metrics.get('accuracy_new_model', 0)
-        else:
-            # Get initial model accuracy from semantic memory or first run
-            previous_accuracy = state.get('previous_accuracy', 0)
+        prompt = prompt_fix_code()
+        chain = prompt | self.llm
+        fixed_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
         
-        # Get current and previous code
-        current_code = state['generations_slow_graph']['tiny_change']
-        previous_code = state['semantic_memory'].model_code if len(state['improvement_history']) == 0 else state['improvement_history'][-1].get('new_code', '')
+        try:
+            fixed_dict = yaml.safe_load(fixed_output)
+            if isinstance(fixed_dict, dict) and 'fixed_code' in fixed_dict:
+                if 'validation_steps' in fixed_dict:
+                    state['generations_slow_graph']['validation_steps'] = fixed_dict['validation_steps']
+                return fixed_dict['fixed_code']
+        except yaml.YAMLError:
+            print("Failed to parse fixed code output")
+        
+        return code
+
+    def _process_execution_results(self, state: WorkingMemory, execution_output: str, current_code: str) -> WorkingMemory:
+        """Process execution results and update improvement history."""
+        print("Execution Output:", "-"*100)
+        print(execution_output)
+        
+        # Store raw output
+        state['generations_slow_graph']['execution_output'] = execution_output
+        
+        # Extract metrics from both YAML files
+        try:
+            # Read old model metrics
+            with open('old_metrics.yaml', 'r') as f:
+                old_metrics = yaml.safe_load(f)
+                old_model_score = old_metrics.get('model_old_score', {})
+            
+            # Read new model metrics
+            with open('slow_graph_metrics.yaml', 'r') as f:
+                new_metrics = yaml.safe_load(f)
+                new_model_score = new_metrics.get('model_new_score', {})
+                
+            # Get current strategy and changes information
+            current_strategy = state['generations_slow_graph'].get('current_strategy')
+            strategy_results = state['generations_slow_graph'].get('strategy_results', {})
+            
+            # Prepare changes made dictionary based on strategy
+            changes_made = {
+                'strategy': current_strategy,
+                'iteration_count': state['generations_slow_graph'].get('iteration_count', 0)
+            }
+            
+            # Add strategy-specific changes
+            if current_strategy == 'model_selection':
+                changes_made.update({'models_tried': strategy_results.get('model_selection', {}).get('models_tried', [])})
+            elif current_strategy == 'hyperparameter_tuning':
+                changes_made.update({'parameters': strategy_results.get('hyperparameter_tuning', {}).get('best_params', {})})
+            elif current_strategy == 'ensemble_method':
+                changes_made.update({'ensemble_type': strategy_results.get('ensemble_method', {}).get('best_ensemble', '')})
+
+            # Create improvement entry
+            improvement_entry = create_improvement_entry(
+                previous_code=state['semantic_memory'].model_code,
+                new_code=current_code,
+                graph_type='slow',
+                strategy_type=current_strategy,
+                old_model_score=old_model_score,
+                new_model_score=new_model_score,
+                changes_made=changes_made
+            )
+
+            # Initialize improvement_history if it doesn't exist
+            if 'improvement_history' not in state:
+                state['improvement_history'] = []
+            
+            # Add the new improvement entry
+            state['improvement_history'].append(improvement_entry)
+                
+            # Update state with metrics and success status
+            state['generations_slow_graph'].update({
+                'execution_success': True,
+                'model_new_score': new_model_score,
+                'model_old_score': old_model_score
+            })
+            
+        except (yaml.YAMLError, FileNotFoundError) as e:
+            print(f"Error processing metrics: {str(e)}")
+            state['generations_slow_graph']['execution_success'] = False
+        
+        return state
+
+
+    def evaluate_change(self, state: WorkingMemory) -> WorkingMemory:
+        """Evaluate model changes and update improvement history."""
+        print("\nEvaluating model changes...", "-"*50)
+        
+        # Get latest improvement entry
+        if not state.get('improvement_history'):
+            print("No improvement history found. Cannot evaluate changes.")
+            return state
+            
+        latest_improvement = state['improvement_history'][-1]
+        
+        # Get metrics from the latest improvement
+        current_metrics = latest_improvement['metrics']['new_model']
+        previous_metrics = latest_improvement['metrics']['old_model']
+        
+        # Get code versions
+        current_code = latest_improvement['new_code']
+        previous_code = latest_improvement['previous_code']
         
         # Prepare evaluation input
         yaml_content = {
             'current_code': current_code,
-            'execution_output': execution_output,
-            'previous_accuracy': previous_accuracy
+            'execution_output': state['generations_slow_graph']['execution_output'],
+            'current_metrics': current_metrics,
+            'previous_metrics': previous_metrics,
+            'strategy_type': latest_improvement['strategy_type'],
+            'improvements': latest_improvement['improvements']
         }
         
         # Get evaluation from LLM
-        prompt = prompt_evaluate_change()
-        chain = prompt | self.llm
-        evaluation_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
-        evaluation_result = yaml.safe_load(evaluation_output)
+        evaluation_result = self._get_evaluation(yaml_content)
         
-        # Print debug information
+        # Log evaluation metrics
+        self._log_evaluation_metrics(current_metrics, previous_metrics)
+        
+        # Update improvement entry with evaluation results, with proper error handling
+        try:
+            recommendation = evaluation_result.get('recommendation', {})
+            action = recommendation.get('action', 'reject')  # Default to reject if not found
+            
+            updated_improvement = {
+                **latest_improvement,
+                'evaluation': evaluation_result,
+                'final_outcome': action
+            }
+            
+            # Replace the latest improvement with updated version
+            state['improvement_history'][-1] = updated_improvement
+            
+            # Update strategy results
+            current_strategy = state['generations_slow_graph'].get('current_strategy')
+            if current_strategy:
+                strategy_results = state['generations_slow_graph'].get('strategy_results', {})
+                if current_strategy in strategy_results:
+                    strategy_results[current_strategy]['tried'] = True
+                    
+                    # Update strategy-specific information
+                    if current_strategy == 'model_selection':
+                        model_name = latest_improvement['changes_made'].get('model_name', '')
+                        if model_name:
+                            models_tried = strategy_results[current_strategy].get('models_tried', [])
+                            if model_name not in models_tried:
+                                models_tried.append(model_name)
+                            strategy_results[current_strategy]['models_tried'] = models_tried
+                            
+                    elif current_strategy == 'hyperparameter_tuning':
+                        best_params = latest_improvement['changes_made'].get('parameters', {})
+                        if best_params:
+                            strategy_results[current_strategy]['best_params'] = best_params
+                            
+                    elif current_strategy == 'ensemble_method':
+                        ensemble_type = latest_improvement['changes_made'].get('ensemble_type', '')
+                        if ensemble_type:
+                            strategy_results[current_strategy]['best_ensemble'] = ensemble_type
+                    
+                    state['generations_slow_graph']['strategy_results'] = strategy_results
+            
+            # Store evaluation in state
+            state['generations_slow_graph']['evaluation'] = evaluation_result
+            
+        except Exception as e:
+            print(f"Error updating improvement entry: {str(e)}")
+            # Create a minimal evaluation result if there's an error
+            state['generations_slow_graph']['evaluation'] = {
+                'recommendation': {'action': 'reject', 'confidence': 'low'},
+                'analysis': [f'Error in evaluation: {str(e)}'],
+                'next_steps': ['Retry with different approach']
+            }
+        
+        return state
+
+
+    def _extract_current_metrics(self, state: WorkingMemory) -> Dict[str, float]:
+        """Extract current model metrics."""
+        try:
+            model_new_score = state['generations_slow_graph'].get('model_new_score', {})
+            return {
+                'on_old_data': float(model_new_score.get('on_old_data', 0)),
+                'on_new_data': float(model_new_score.get('on_new_data', 0))
+            }
+        except (TypeError, ValueError):
+            return {'on_old_data': 0.0, 'on_new_data': 0.0}
+
+    def _extract_previous_metrics(self, state: WorkingMemory) -> Dict[str, float]:
+        """Extract previous model metrics."""
+        if state['improvement_history']:
+            last_entry = state['improvement_history'][-1]
+            return {
+                'on_old_data': float(last_entry.get('metrics_change', {}).get('old_distribution', 0)),
+                'on_new_data': float(last_entry.get('metrics_change', {}).get('new_distribution', 0))
+            }
+        return {'on_old_data': 0.0, 'on_new_data': 0.0}
+
+
+    def _get_previous_code(self, state: WorkingMemory) -> str:
+        """Get previous code version."""
+        if not state['improvement_history']:
+            return state['semantic_memory'].model_code
+        return state['improvement_history'][-1].get('new_code', '')
+
+
+    def _get_evaluation(self, yaml_content: Dict) -> Dict:
+        """Get evaluation from LLM with better error handling."""
+        try:
+            prompt = prompt_evaluate_change()
+            chain = prompt | self.llm
+            evaluation_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
+            
+            result = yaml.safe_load(evaluation_output)
+            
+            # Ensure the result has the expected structure
+            if not isinstance(result, dict):
+                raise ValueError("Evaluation result is not a dictionary")
+                
+            # Ensure minimum required structure
+            if 'recommendation' not in result:
+                result['recommendation'] = {'action': 'reject', 'confidence': 'low'}
+            if 'analysis' not in result:
+                result['analysis'] = ['No analysis provided']
+            if 'next_steps' not in result:
+                result['next_steps'] = ['Retry with different approach']
+                
+            return result
+            
+        except Exception as e:
+            print(f"Error in evaluation: {str(e)}")
+            # Return a default evaluation result
+            return {
+                'recommendation': {'action': 'reject', 'confidence': 'low'},
+                'analysis': [f'Error in evaluation: {str(e)}'],
+                'next_steps': ['Retry with different approach']
+            }
+        
+        
+    def _log_evaluation_metrics(self, current_metrics: Dict[str, float], previous_metrics: Dict[str, float]):
+        """Log evaluation metrics for debugging."""
         print("\nEvaluation Metrics:", "-"*50)
-        print(f"Current Accuracy: {current_accuracy}")
-        print(f"Previous Accuracy: {previous_accuracy}")
-        print(f"Improvement: {current_accuracy - previous_accuracy if current_accuracy else 0}")
-        
-        # Update improvement history
-        improvement_entry = {
-            'previous_code': previous_code,
-            'new_code': current_code,
-            'accuracy_change': current_accuracy - previous_accuracy if current_accuracy else 0,
-            'evaluation': evaluation_result
-        }
-        
+        print("Current Performance:")
+        print(f"  Old Distribution: {current_metrics['on_old_data']:.4f}")
+        print(f"  New Distribution: {current_metrics['on_new_data']:.4f}")
+        print("\nPrevious Performance:")
+        print(f"  Old Distribution: {previous_metrics['on_old_data']:.4f}")
+        print(f"  New Distribution: {previous_metrics['on_new_data']:.4f}")
+        print("\nImprovements:")
+        print(f"  Old Distribution: {current_metrics['on_old_data'] - previous_metrics['on_old_data']:.4f}")
+        print(f"  New Distribution: {current_metrics['on_new_data'] - previous_metrics['on_new_data']:.4f}")
+
+    def _update_state_with_evaluation(self, state: WorkingMemory, 
+                                    improvement_entry: Dict,
+                                    current_metrics: Dict) -> WorkingMemory:
+        """Update state with evaluation results."""
         if 'improvement_history' not in state:
             state['improvement_history'] = []
         state['improvement_history'].append(improvement_entry)
         
-        # Update state
-        state['previous_accuracy'] = current_accuracy
-        state['previous_code'] = current_code
-        state['generations_slow_graph']['evaluation'] = evaluation_result
+        # Update state tracking
+        state['generations_slow_graph']['evaluation'] = improvement_entry['evaluation']
         
-        # Update strategy results with actual metrics
+        # Update strategy results
         current_strategy = state['generations_slow_graph'].get('current_strategy')
-        if current_strategy and current_accuracy:
+        if current_strategy:
             strategy_results = state['generations_slow_graph'].get('strategy_results', {})
             if current_strategy in strategy_results:
                 strategy_results[current_strategy].update({
                     'tried': True,
-                    'best_accuracy': max(
-                        strategy_results[current_strategy].get('best_accuracy', 0),
-                        current_accuracy
-                    )
+                    'best_accuracy': {
+                        'on_old_data': max(
+                            strategy_results[current_strategy].get('best_accuracy', {}).get('on_old_data', 0),
+                            current_metrics['on_old_data']
+                        ),
+                        'on_new_data': max(
+                            strategy_results[current_strategy].get('best_accuracy', {}).get('on_new_data', 0),
+                            current_metrics['on_new_data']
+                        )
+                    }
                 })
                 state['generations_slow_graph']['strategy_results'] = strategy_results
         
+        # Log strategy status
         print("\nStrategy Status:", "-"*50)
         print(f"Current Strategy: {current_strategy}")
         print("Strategy Results:", state['generations_slow_graph']['strategy_results'])
         
         return state
 
-
-    # def evaluate_change(self, state: WorkingMemory) -> WorkingMemory:
-    #     """Evaluate the applied change and update improvement history."""
-    #     print("\nEntering evaluate_change...", "-"*50)
-        
-    #     # Get current metrics
-    #     current_accuracy = state['generations_slow_graph'].get('new_accuracy')
-    #     previous_accuracy = state.get('previous_accuracy', 0)
-        
-    #     # Get current and previous code
-    #     current_code = state['generations_slow_graph']['tiny_change']
-    #     previous_code = state['semantic_memory'].model_code if len(state['improvement_history']) == 0 else state['improvement_history'][-1].get('new_code', '')
-        
-    #     # Create evaluation prompt
-    #     prompt = prompt_evaluate_change()
-        
-    #     # Prepare input YAML
-    #     yaml_content = {
-    #         'current_code': current_code,
-    #         'execution_output': state['generations_slow_graph']['execution_output'],
-    #         'previous_accuracy': previous_accuracy
-    #     }
-        
-    #     # Get evaluation from LLM
-    #     chain = prompt | self.llm
-    #     evaluation_output = chain.invoke({'input': yaml.dump(yaml_content)}).content
-    #     evaluation_result = yaml.safe_load(evaluation_output)
-        
-    #     # Print debug information about the evaluation
-    #     print("\nEvaluation Result:", "-"*50)
-    #     print(f"Current Accuracy: {current_accuracy}")
-    #     print(f"Previous Accuracy: {previous_accuracy}")
-    #     print(f"Recommendation: {evaluation_result.get('evaluation', {}).get('recommendation', {}).get('action')}")
-    #     print(f"Next Steps: {evaluation_result.get('evaluation', {}).get('next_steps', [])}")
-        
-    #     # Prepare improvement history entry
-    #     improvement_entry = {
-    #         'previous_code': previous_code,
-    #         'new_code': current_code,
-    #         'accuracy_change': current_accuracy - previous_accuracy if current_accuracy else 0,
-    #         'evaluation': evaluation_result
-    #     }
-        
-    #     # Update improvement history
-    #     if 'improvement_history' not in state:
-    #         state['improvement_history'] = []
-    #     state['improvement_history'].append(improvement_entry)
-        
-    #     # Print improvement history statistics
-    #     print("\nImprovement History:", "-"*50)
-    #     print(f"Total Improvements Attempted: {len(state['improvement_history'])}")
-    #     print(f"Latest Accuracy Change: {improvement_entry['accuracy_change']}")
-        
-    #     # Update current state for next iteration
-    #     state['previous_accuracy'] = current_accuracy
-    #     state['previous_code'] = current_code
-    #     state['generations_slow_graph']['evaluation'] = evaluation_result
-        
-    #     # Update strategy results
-    #     current_strategy = state['generations_slow_graph'].get('current_strategy')
-    #     if current_strategy:
-    #         strategy_results = state['generations_slow_graph'].get('strategy_results', {})
-    #         if current_strategy in strategy_results:
-    #             strategy_results[current_strategy]['tried'] = True
-    #             state['generations_slow_graph']['strategy_results'] = strategy_results
-        
-    #     print("\nExiting evaluate_change...", "-"*50)
-    #     print(f"Current Strategy: {current_strategy}")
-    #     print(f"Strategies Tried: {[s for s, r in state['generations_slow_graph'].get('strategy_results', {}).items() if r.get('tried', False)]}")
-        
-    #     return state
-
     def should_evaluate_code(self, state: WorkingMemory) -> str:
-        """Determine if code should be evaluated or retried.
-        
-        Args:
-            state: Current working memory state
-            
-        Returns:
-            'evaluate' if code executed successfully, 'retry' otherwise
-        """
+        """Determine if code should be evaluated or retried."""
         return 'evaluate' if state['generations_slow_graph'].get('execution_success', False) else 'retry'
 
 
-
     def run(self, initial_state: WorkingMemory):
-        """Run the slow improvement process.
-        
-        Args:
-            initial_state: Initial working memory state
-            
-        Returns:
-            Final state after improvements
-        """
+        """Run the slow improvement process with enhanced logging."""
         # Initialize generations if not present
         if 'generations_slow_graph' not in initial_state:
             initial_state['generations_slow_graph'] = self.initialize_generations()
             
         output_keys = ['generations_slow_graph', 'improvement_history']
-        visited_keys = []
+        visited_states = set()
         
-        for output in self.decision_procedure.stream(
-            initial_state, 
-            output_keys=output_keys, 
-            debug=False
-        ):
-            for node_name, state in output.items():
-                # Print generations updates
-                for k, v in state['generations_slow_graph'].items():
-                    if state['generations_slow_graph'][k] and k not in visited_keys:
-                        title = Text(k, style="bold green")
-                        content = Text(str(v))
-                        panel = Panel(content, title=title)
-                        print(panel)
-                        visited_keys.append(k)
+        try:
+            for output in self.decision_procedure.stream(
+                initial_state, 
+                output_keys=output_keys, 
+                debug=False
+            ):
+                for node_name, state in output.items():
+                    state_key = (node_name, len(state.get('improvement_history', [])))
+                    if state_key in visited_states:
+                        continue
                         
-                # Print improvement history updates
-                if 'improvement_history' in state and state['improvement_history']:
-                    latest_improvement = state['improvement_history'][-1]
-                    if 'latest_improvement' not in visited_keys:
-                        title = Text("Latest Improvement", style="bold blue")
-                        content = Text(str(latest_improvement))
-                        panel = Panel(content, title=title)
-                        print(panel)
-                        visited_keys.append('latest_improvement')
+                    visited_states.add(state_key)
+                    
+                    # Log node execution
+                    print(f"\nExecuting Node: {node_name}", "="*50)
+                    
+                    # Log generations updates
+                    self._log_generations_updates(state)
+                    
+                    # Log improvement history updates
+                    self._log_improvement_history(state)
+                    
+                    # Log strategy progress
+                    self._log_strategy_progress(state)
+                    
+        except Exception as e:
+            print(f"Error in graph execution: {str(e)}")
+            raise
         
         return output
- 
+
+    def _log_generations_updates(self, state: Dict):
+        """Log updates to generations dictionary."""
+        generations = state.get('generations_slow_graph', {})
+        for key, value in generations.items():
+            if key not in {'strategy_results', 'strategy_analysis'}:  # Skip complex nested structures
+                title = Text(f"Generation Update: {key}", style="bold green")
+                content = Text(str(value))
+                panel = Panel(content, title=title)
+                print(panel)
+
+    def _log_improvement_history(self, state: Dict):
+        """Log updates to improvement history."""
+        history = state.get('improvement_history', [])
+        if history:
+            latest = history[-1]
+            title = Text("Latest Improvement", style="bold blue")
+            content = Text(
+                f"Strategy: {latest.get('strategy_type', 'unknown')}\n"
+                f"Outcome: {latest.get('outcome', 'unknown')}\n"
+                f"Improvements:\n"
+                f"  New Distribution: {latest.get('improvements', {}).get('new_distribution', 0):.4f}\n"
+                f"  Old Distribution: {latest.get('improvements', {}).get('old_distribution', 0):.4f}\n"
+                f"Evaluation: {latest.get('evaluation', {}).get('recommendation', {}).get('action', 'unknown')}"
+            )
+            panel = Panel(content, title=title)
+            print(panel)
+
+    def _log_strategy_progress(self, state: Dict):
+        """Log progress of strategy execution."""
+        strategy_results = state.get('generations_slow_graph', {}).get('strategy_results', {})
+        current_strategy = state.get('generations_slow_graph', {}).get('current_strategy')
+        
+        title = Text("Strategy Progress", style="bold yellow")
+        content = []
+        
+        for strategy, results in strategy_results.items():
+            status = "✓" if results.get('tried', False) else "○"
+            current = "→" if strategy == current_strategy else " "
+            content.append(f"{current} [{status}] {strategy}")
+        
+        panel = Panel("\n".join(content), title=title)
+        print(panel)
 
 class EnhancedStateGraph(StateGraph):
     """Enhanced StateGraph with function name printing capability."""
