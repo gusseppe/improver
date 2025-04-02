@@ -1,0 +1,128 @@
+agent_name: self_discovery
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/financial"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.0
+  new_distribution: 0.0
+improvement_path:
+- iteration: 1
+  code: "import pandas as pd\nimport numpy as np\nimport yaml\nfrom sklearn.ensemble\
+    \ import GradientBoostingClassifier\nfrom sklearn.model_selection import train_test_split\n\
+    from sklearn.preprocessing import StandardScaler\nfrom sklearn.metrics import\
+    \ accuracy_score\n\n# Load data from specified folder\ndataset_folder = \"datasets/financial\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# Load new data\nX_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new = pd.read_csv(f\"\
+    {dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\"\
+    ).squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n# Feature scaling with StandardScaler\nscaler = StandardScaler()\n\
+    X_train_old_scaled = scaler.fit_transform(X_train_old)\nX_test_old_scaled = scaler.transform(X_test_old)\n\
+    X_train_new_scaled = scaler.transform(X_train_new)\nX_test_new_scaled = scaler.transform(X_test_new)\n\
+    \n# Create a single dataframe for the combined train and test data\ntrain_data\
+    \ = pd.concat([pd.DataFrame(X_train_old_scaled), pd.DataFrame(X_train_new_scaled)])\n\
+    test_data = pd.concat([pd.DataFrame(X_test_old_scaled), pd.DataFrame(X_test_new_scaled)])\n\
+    train_labels = pd.concat([y_train_old, y_train_new])\ntest_labels = pd.concat([y_test_old,\
+    \ y_test_new])\n\n# Split the combined train data into train and validation sets\n\
+    X_train, X_val, y_train, y_val = train_test_split(train_data, train_labels, test_size=0.2,\
+    \ random_state=42)\n\n# Define the improved model\nmodel = GradientBoostingClassifier(n_estimators=100,\
+    \ max_depth=3, random_state=42)\n\n# Train the model on the combined data\nmodel.fit(X_train,\
+    \ y_train)\n\n# Evaluate on validation set\nval_score = accuracy_score(y_val,\
+    \ model.predict(X_val))\nprint(f'Model evaluated on validation set: {val_score}')\n\
+    \n# Evaluate on old distribution\nold_score = accuracy_score(y_test_old, model.predict(X_test_old_scaled))\n\
+    print(f'Model evaluated on old distribution: {old_score}')\n\n# Evaluate on new\
+    \ distribution\nnew_score = accuracy_score(y_test_new, model.predict(X_test_new_scaled))\n\
+    print(f'Model evaluated on new distribution: {new_score}')\n\n# Save metrics\n\
+    with open('metrics_self_discovery.yaml', 'w') as f:\n    model_new_score = {\n\
+    \        'on_old_data': float(old_score),\n        'on_new_data': float(new_score)\n\
+    \    }\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  metrics:
+    old_distribution: 0.8916666666666667
+    new_distribution: 0.8333333333333334
+  changes:
+  - Implemented GradientBoosting for better handling of distribution shifts
+  - Added feature scaling using StandardScaler
+  - Combined old and new training data
+  reflection: 'Selected Modules: 1. How could I simplify the problem so that it is
+    easier to solve?
+
+    2. What are the key techniques for improving an ML model on distribution shifts?
+
+    3. How can I implement a robust solution that works with the given datasets?'
+  execution_time: 0
+final_code: "import pandas as pd\nimport numpy as np\nimport yaml\nfrom sklearn.ensemble\
+  \ import GradientBoostingClassifier\nfrom sklearn.model_selection import train_test_split\n\
+  from sklearn.preprocessing import StandardScaler\nfrom sklearn.metrics import accuracy_score\n\
+  \n# Load data from specified folder\ndataset_folder = \"datasets/financial\"\nX_train_old\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+  {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+  ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+  ).squeeze(\"columns\")\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new =\
+  \ pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new\
+  \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n#\
+  \ Feature scaling with StandardScaler\nscaler = StandardScaler()\nX_train_old_scaled\
+  \ = scaler.fit_transform(X_train_old)\nX_test_old_scaled = scaler.transform(X_test_old)\n\
+  X_train_new_scaled = scaler.transform(X_train_new)\nX_test_new_scaled = scaler.transform(X_test_new)\n\
+  \n# Create a single dataframe for the combined train and test data\ntrain_data =\
+  \ pd.concat([pd.DataFrame(X_train_old_scaled), pd.DataFrame(X_train_new_scaled)])\n\
+  test_data = pd.concat([pd.DataFrame(X_test_old_scaled), pd.DataFrame(X_test_new_scaled)])\n\
+  train_labels = pd.concat([y_train_old, y_train_new])\ntest_labels = pd.concat([y_test_old,\
+  \ y_test_new])\n\n# Split the combined train data into train and validation sets\n\
+  X_train, X_val, y_train, y_val = train_test_split(train_data, train_labels, test_size=0.2,\
+  \ random_state=42)\n\n# Define the improved model\nmodel = GradientBoostingClassifier(n_estimators=100,\
+  \ max_depth=3, random_state=42)\n\n# Train the model on the combined data\nmodel.fit(X_train,\
+  \ y_train)\n\n# Evaluate on validation set\nval_score = accuracy_score(y_val, model.predict(X_val))\n\
+  print(f'Model evaluated on validation set: {val_score}')\n\n# Evaluate on old distribution\n\
+  old_score = accuracy_score(y_test_old, model.predict(X_test_old_scaled))\nprint(f'Model\
+  \ evaluated on old distribution: {old_score}')\n\n# Evaluate on new distribution\n\
+  new_score = accuracy_score(y_test_new, model.predict(X_test_new_scaled))\nprint(f'Model\
+  \ evaluated on new distribution: {new_score}')\n\n# Save metrics\nwith open('metrics_self_discovery.yaml',\
+  \ 'w') as f:\n    model_new_score = {\n        'on_old_data': float(old_score),\n\
+  \        'on_new_data': float(new_score)\n    }\n    yaml.dump({'model_new_score':\
+  \ model_new_score}, f)"
+final_metrics:
+  old_distribution: 0.8916666666666667
+  new_distribution: 0.8333333333333334
+runtime_statistics:
+  total_time_seconds: 59.927693605422974
+  iterations: 1
+  tokens_used: 5033
+  prompt_tokens: 2227
+  completion_tokens: 2806
+  iteration_times: []
+  evaluation_timestamp: '2025-03-07T18:56:20.052810Z'

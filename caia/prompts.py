@@ -357,6 +357,207 @@ def prompt_stats_data() -> ChatPromptTemplate:
     return final_prompt
 
 
+def prompt_generate_retraining_code_with_insights() -> ChatPromptTemplate:
+    examples = [
+        {
+            "input": '''
+            old_training_code: |
+                import pandas as pd
+                from sklearn.ensemble import RandomForestClassifier
+
+                # load the old data
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+                model_old = RandomForestClassifier(random_state=42)
+
+                model_old.fit(X_train_old, y_train_old)
+
+                # Test the model on the initial test set
+                initial_accuracy = model_old.score(X_test_old, y_test_old)
+
+                print(f'Model trained and evaluated on the old distribution: {initial_accuracy}')
+            
+            improved_model_code: |
+                import pandas as pd
+                from sklearn.ensemble import GradientBoostingClassifier
+                
+                # load the old data
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                model = GradientBoostingClassifier(
+                    n_estimators=200,
+                    learning_rate=0.05,
+                    max_depth=4,
+                    subsample=0.8,
+                    random_state=42
+                )
+                
+                model.fit(X_train_old, y_train_old)
+                
+                # Test the model on the initial test set
+                initial_accuracy = model.score(X_test_old, y_test_old)
+                
+                print(f'Model trained and evaluated on the old distribution: {initial_accuracy}')
+            ''',
+            "output": '''
+            new_training_code: |
+                import yaml
+                import pandas as pd
+                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.metrics import accuracy_score
+                
+                # Initialize metrics dictionaries
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                
+                model_old_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Train old model and evaluate
+                model_old = GradientBoostingClassifier(
+                    n_estimators=200,
+                    learning_rate=0.05,
+                    max_depth=4,
+                    subsample=0.8,
+                    random_state=42
+                )
+                model_old.fit(X_train_old, y_train_old)
+                
+                # Test old model on old distribution
+                old_score_old = model_old.score(X_test_old, y_test_old)
+                print(f'Old model trained and evaluated on the old distribution: {old_score_old}')
+                model_old_score['on_old_data'] = float(old_score_old)
+                
+                # Load new data
+                X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+                X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+                y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+                y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+                
+                # Test old model on new distribution
+                old_score_new = model_old.score(X_test_new, y_test_new)
+                print(f'Old model evaluated on the new distribution: {old_score_new}')
+                model_old_score['on_new_data'] = float(old_score_new)
+                
+                # Save old model metrics
+                with open('old_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_old_score': model_old_score}, f)
+                
+                print("\\nTraining new model on combined data...")
+                
+                # Combine datasets for training new model
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
+                
+                # Create and train new model with optimized parameters
+                model_new = GradientBoostingClassifier(
+                    n_estimators=200,
+                    learning_rate=0.05,
+                    max_depth=4, 
+                    subsample=0.8,
+                    random_state=42
+                )
+                model_new.fit(X_train, y_train)
+                
+                # Evaluate new model on old distribution
+                new_score_old = model_new.score(X_test_old, y_test_old)
+                print(f'New model trained and evaluated on old distribution: {new_score_old}')
+                model_new_score['on_old_data'] = float(new_score_old)
+                
+                # Evaluate new model on new distribution
+                new_score_new = model_new.score(X_test_new, y_test_new)
+                print(f'New model evaluated on new distribution: {new_score_new}')
+                model_new_score['on_new_data'] = float(new_score_new)
+                
+                # Save new model metrics
+                with open('fast_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
+            '''
+        }
+    ]
+
+    for example in examples:
+        example["input"] = textwrap.dedent(example["input"]).strip()
+        example["output"] = textwrap.dedent(example["output"]).strip()
+
+    example_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("human", "{input}"),
+            ("ai", "{output}"),
+        ]
+    )
+    
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=examples,
+    )
+
+    system_prompt = """
+    You are an expert machine learning engineer. You have to generate retraining code that leverages insights from a comprehensive ML model analysis.
+
+    Context: You have been given:
+    1. Original training code
+    2. Improved model code from slow graph analysis
+    3. Metrics and insights from slow graph analysis
+
+    Objective: Create new retraining code (new_training_code) that:
+    1. First evaluates the improved model on both distributions:
+       - Uses the improved model configuration from slow graph analysis
+       - Trains on old data
+       - Tests on old test set 
+       - Tests on new (drifted) test set
+       - Saves model metrics to 'old_metrics.yaml'
+    2. Then trains a new model on combined data and evaluates it:
+       - Uses the same improved model architecture and parameters
+       - Trains on combined dataset (old + new data)
+       - Tests on old test set
+       - Tests on new (drifted) test set
+       - Saves metrics to 'fast_graph_metrics.yaml'
+    3. Prints performance metrics at each step
+
+    Your code must leverage the insights and model improvements from the slow graph to ensure robust performance across distributions.
+            
+    Style: Provide clear, well-structured Python code that implements the improved model architecture and parameters from the slow graph analysis.
+
+    Response Format: Format your response as YAML output with the following structure:
+
+    new_training_code: |
+      [NEW TRAINING/EVALUATING CODE HERE]
+
+    Only provide the YAML-formatted code output. Do not include any other explanation or commentary.
+    """
+
+    system_prompt = textwrap.dedent(system_prompt).strip()
+
+    final_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            few_shot_prompt,
+            ("human", "{input}"),
+        ]
+    )
+    return final_prompt
+
+
 def prompt_generate_retraining_code() -> ChatPromptTemplate:
     examples = [
         {
@@ -397,6 +598,7 @@ def prompt_generate_retraining_code() -> ChatPromptTemplate:
                 }
 
                 # load the old data
+                dataset_folder = "datasets/financial"
                 X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
                 X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
                 y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
@@ -1194,9 +1396,17 @@ def prompt_fix_code() -> ChatPromptTemplate:
         {
             "input": """
             current_code: |
+                import pandas as pd
                 from sklearn.ensemble import GradientBoostingClassifier
                 from sklearn.metrics import accuracy_score
                 import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
                 
                 # Initialize metrics dictionaries
                 model_new_score = {
@@ -1209,16 +1419,24 @@ def prompt_fix_code() -> ChatPromptTemplate:
                 }
                 
                 model = GradientBoostingClassifier(n_estimators=150)
-                model.fit(X_train_scaled)  # Missing y_train
+                model.fit(X_train_old)  # Missing y_train
             
             error_output: |
                 TypeError: fit() missing 1 required positional argument: 'y'
             """,
             "output": """
             fixed_code: |
+                import pandas as pd
                 from sklearn.ensemble import GradientBoostingClassifier
                 from sklearn.metrics import accuracy_score
                 import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
                 
                 # Initialize metrics dictionaries
                 model_new_score = {
@@ -1232,26 +1450,44 @@ def prompt_fix_code() -> ChatPromptTemplate:
                 }
                 
                 # Train and evaluate old model
-                model = GradientBoostingClassifier(n_estimators=150)
-                model.fit(X_train_scaled, y_train)  # Added missing y_train
+                model = GradientBoostingClassifier(n_estimators=150, random_state=42)
+                model.fit(X_train_old, y_train_old)  # Added missing y_train
+                
+                # Save metrics
+                metrics = {
+                    'model_new_score': model_new_score,
+                    'model_old_score': model_old_score
+                }
+                
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump(metrics, f)
             
             fixes_made:
-              - Added missing y_train argument to model.fit()
-              - Added missing on_old_data metric
-              - Improved code organization with comments
+            - Added missing y_train argument to model.fit()
+            - Added missing on_old_data metric
+            - Added random_state for reproducibility
+            - Added proper metrics saving
+            - Improved code organization with comments
             
             validation_steps:
-              - Verify metrics dictionary structure is complete
-              - Check y_train is available in scope
-              - Validate data shapes match
+            - Verify metrics dictionary structure is complete
+            - Check y_train is available in scope
+            - Validate data shapes match
+            - Confirm metrics file is created correctly
             """
         },
         {
             "input": """
             current_code: |
+                import pandas as pd
                 import yaml
                 from sklearn.ensemble import RandomForestClassifier
                 from sklearn.metrics import accuracy_score
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
                 
                 metrics = {
                     'difference_score_averages': {
@@ -1271,54 +1507,65 @@ def prompt_fix_code() -> ChatPromptTemplate:
             """,
             "output": """
             fixed_code: |
+                import pandas as pd
                 import yaml
                 from sklearn.ensemble import RandomForestClassifier
                 from sklearn.metrics import accuracy_score
                 
-                # Initialize metrics with correct format
-                model_new_score = {
-                    'on_new_data': 0.0,
-                    'on_old_data': 0.0
-                }
-                model_old_score = {
-                    'on_new_data': 0.0,
-                    'on_old_data': 0.0
-                }
-                
+                # Load data from specified folder with error handling
                 try:
+                    dataset_folder = "datasets/financial"
+                    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                    
+                    # Initialize metrics with correct format
+                    model_new_score = {
+                        'on_new_data': 0.0,
+                        'on_old_data': 0.0
+                    }
+                    model_old_score = {
+                        'on_new_data': 0.0,
+                        'on_old_data': 0.0
+                    }
+                    
                     # Train and evaluate old model
                     model_old = RandomForestClassifier(random_state=42)
                     model_old.fit(X_train_old, y_train_old)
                     
-                    # Test old model with error handling
+                    # Test old model with proper error handling
                     old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))
                     print(f'Old model trained and evaluated on the old distribution: {old_score_old}')
                     model_old_score['on_old_data'] = float(old_score_old)
                     
+                    # Save metrics with correct format
+                    metrics = {
+                        'model_new_score': model_new_score,
+                        'model_old_score': model_old_score
+                    }
+                    
+                    with open('slow_graph_metrics.yaml', 'w') as f:
+                        yaml.dump(metrics, f)
+                        
                 except Exception as e:
                     print(f"Error during model training/evaluation: {str(e)}")
-                    
-                # Save metrics
-                metrics = {
-                    'model_new_score': model_new_score,
-                    'model_old_score': model_old_score
-                }
-                
-                with open('slow_graph_metrics.yaml', 'w') as f:
-                    yaml.dump(metrics, f)
             
             fixes_made:
-              - Updated metrics format to new structure
-              - Added error handling for data access
-              - Added random_state for reproducibility
-              - Improved metrics saving
-              - Added proper print messages
+            - Added proper data loading with error handling
+            - Updated metrics format to new structure
+            - Added random_state for reproducibility
+            - Added missing test data loading
+            - Improved metrics saving
+            - Added proper print messages
+            - Implemented try-except block
             
             validation_steps:
-              - Verify metrics format matches requirements
-              - Check all data variables are in scope
-              - Validate metrics file creation
-              - Verify error handling catches issues
+            - Verify all data files are loaded correctly
+            - Check metrics format matches requirements
+            - Validate metrics file creation
+            - Verify error handling catches issues
+            - Confirm all variables are properly defined
             """
         }
     ]
@@ -1359,12 +1606,12 @@ def prompt_fix_code() -> ChatPromptTemplate:
     5. Keep sklearn-compatible code structure
 
     Objective: Fix the code while:
-    1. Addressing the specific error
-    2. Ensuring correct metrics tracking
-    3. Maintaining proper evaluation flow
-    4. Adding error prevention
-    5. Improving code organization
-    6. Using descriptive print messages
+    1. Addressing specific ML library errors and conflicts
+    2. Handling parameter incompatibilities
+    3. Fixing training and evaluation setup issues
+    4. Maintaining proper data processing flow
+    5. Adding relevant error prevention
+    6. Preserving dataset folder paths
 
     Style Guidelines:
     1. Clear metrics initialization
@@ -1502,8 +1749,17 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
         {
             "input": """
             current_code: |
+                import pandas as pd
                 import lightgbm as lgb
                 from sklearn.metrics import accuracy_score
+                import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
                 
                 model_old = lgb.LGBMClassifier(
                     n_estimators=100,
@@ -1523,8 +1779,23 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
             """,
             "output": """
             fixed_code: |
+                import pandas as pd
                 import lightgbm as lgb
                 from sklearn.metrics import accuracy_score
+                import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Initialize metrics dictionaries
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
                 
                 # Configure LightGBM with appropriate parameters
                 model_old = lgb.LGBMClassifier(
@@ -1541,24 +1812,42 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                     eval_set=[(X_test_old, y_test_old)],
                     callbacks=[lgb.early_stopping(10)]  # Use callbacks for early stopping
                 )
+                
+                # Evaluate model
+                old_score_old = model_old.score(X_test_old, y_test_old)
+                model_new_score['on_old_data'] = float(old_score_old)
+                print(f'Model trained and evaluated on old distribution: {old_score_old}')
+                
+                # Save metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             
             fixes_made:
               - Replaced early_stopping_rounds with proper callback
               - Added random_state for reproducibility
               - Maintained evaluation set functionality
+              - Added metrics tracking and saving
               - Added clarifying comments
             
             validation_steps:
               - Verify early stopping is working
               - Check model convergence
               - Validate prediction functionality
+              - Confirm metrics are saved correctly
             """
         },
         {
             "input": """
             current_code: |
+                import pandas as pd
                 import xgboost as xgb
                 from sklearn.metrics import accuracy_score
+                import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train = pd.read_csv(f"{dataset_folder}/X_train.csv")
+                y_train = pd.read_csv(f"{dataset_folder}/y_train.csv").squeeze("columns")
                 
                 model = xgb.XGBClassifier(
                     n_estimators=200,
@@ -1574,8 +1863,23 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
             """,
             "output": """
             fixed_code: |
+                import pandas as pd
                 import xgboost as xgb
                 from sklearn.metrics import accuracy_score
+                import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train = pd.read_csv(f"{dataset_folder}/X_train.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train = pd.read_csv(f"{dataset_folder}/y_train.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Initialize metrics dictionaries
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
                 
                 # Configure XGBoost with proper parameters
                 model = xgb.XGBClassifier(
@@ -1594,28 +1898,46 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                     verbose=False
                 )
                 
-                # Make predictions
-                y_pred = model.predict(X_test_old)
+                # Evaluate model
+                score = model.score(X_test_old, y_test_old)
+                model_new_score['on_old_data'] = float(score)
+                print(f'Model trained and evaluated on old distribution: {score}')
+                
+                # Save metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             
             fixes_made:
               - Moved eval_metric to constructor
               - Added proper eval_set format
               - Added random_state
               - Added verbose parameter
+              - Added metrics tracking and saving
+              - Added proper data loading
               - Improved code organization
             
             validation_steps:
               - Check evaluation metrics
               - Verify prediction shapes
               - Monitor training progress
+              - Validate metrics file creation
             """
         },
         {
             "input": """
             current_code: |
+                import pandas as pd
                 from sklearn.ensemble import VotingClassifier
                 import lightgbm as lgb
                 import xgboost as xgb
+                import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train = pd.read_csv(f"{dataset_folder}/X_train.csv")
+                y_train = pd.read_csv(f"{dataset_folder}/y_train.csv").squeeze("columns")
+                X_val = pd.read_csv(f"{dataset_folder}/X_val.csv")
+                y_val = pd.read_csv(f"{dataset_folder}/y_val.csv").squeeze("columns")
                 
                 estimators = [
                     ('lgb', lgb.LGBMClassifier()),
@@ -1634,9 +1956,26 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
             """,
             "output": """
             fixed_code: |
+                import pandas as pd
                 from sklearn.ensemble import VotingClassifier
                 import lightgbm as lgb
                 import xgboost as xgb
+                import yaml
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train = pd.read_csv(f"{dataset_folder}/X_train.csv")
+                y_train = pd.read_csv(f"{dataset_folder}/y_train.csv").squeeze("columns")
+                X_val = pd.read_csv(f"{dataset_folder}/X_val.csv")
+                y_val = pd.read_csv(f"{dataset_folder}/y_val.csv").squeeze("columns")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Initialize metrics dictionary
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
                 
                 # Configure base models separately
                 lgb_model = lgb.LGBMClassifier(
@@ -1675,6 +2014,15 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
                 
                 # Final fit of ensemble
                 model.fit(X_train, y_train)
+                
+                # Evaluate ensemble
+                score = model.score(X_test_old, y_test_old)
+                model_new_score['on_old_data'] = float(score)
+                print(f'Ensemble trained and evaluated on old distribution: {score}')
+                
+                # Save metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
             
             fixes_made:
               - Separated base model training
@@ -1682,11 +2030,14 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
               - Added proper eval_set handling
               - Added random states
               - Added n_jobs for parallel processing
+              - Added metrics tracking and saving
+              - Added complete data loading
             
             validation_steps:
               - Verify base models trained correctly
               - Check ensemble predictions
               - Validate voting mechanism
+              - Confirm metrics are saved correctly
             """
         }
     ]
@@ -1710,7 +2061,11 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
     system_prompt = """
     You are an expert ML engineer specializing in fixing machine learning code errors.
 
-    Context: You have ML training code that produced an error during execution.
+    Context: You have:
+    1. ML training code that produced an error during execution
+    2. Dataset folder path from current code
+    3. Requirements for metrics tracking and saving
+    4. Error output to be addressed
 
     Objective: Fix the code while:
     1. Addressing specific ML library errors and conflicts
@@ -1718,7 +2073,19 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
     3. Fixing training and evaluation setup issues
     4. Maintaining proper data processing flow
     5. Adding relevant error prevention
-    6. Improving code organization and documentation
+    6. Preserving dataset folder paths and data loading
+    7. Implementing proper metrics tracking
+    8. Improving code organization and documentation
+
+    Critical Requirements:
+    1. Maintain data loading paths from original code
+    2. Use correct metrics format:
+    model_new_score:
+        on_new_data: [score]
+        on_old_data: [score]
+    3. Save metrics to 'slow_graph_metrics.yaml'
+    4. Include proper error handling
+    5. Ensure reproducibility with random states
 
     Common Issues to Handle:
     1. LightGBM/XGBoost parameter conflicts
@@ -1727,6 +2094,8 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
     4. Model fitting parameter errors
     5. Ensemble model training issues
     6. Data validation and preprocessing errors
+    7. Metrics tracking and saving
+    8. Data loading consistency
 
     Style: Provide clean, well-documented ML code with:
     1. Clear parameter organization
@@ -1734,15 +2103,27 @@ def prompt_fix_code_slow() -> ChatPromptTemplate:
     3. Error prevention mechanisms
     4. Informative comments
     5. Consistent structure
+    6. Complete data loading
+    7. Proper metrics handling
+    8. Clear print messages
 
     Response Format: Format your response as YAML with:
 
     fixed_code: |
-      [COMPLETE FIXED CODE]
+    [COMPLETE FIXED CODE]
     fixes_made:
-      - [List of specific fixes]
+    - [List of specific fixes]
     validation_steps:
-      - [Steps to validate the fixes]
+    - [Steps to validate the fixes]
+
+    The fixed code must:
+    1. Include all necessary imports
+    2. Maintain dataset folder paths
+    3. Load all required data files
+    4. Initialize metrics properly
+    5. Save metrics in correct format
+    6. Include proper error handling
+    7. Add informative print messages
 
     Only provide the YAML-formatted output. Do not include any other explanation or commentary.
     """
@@ -1918,11 +2299,18 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
             current_code: |
                 from sklearn.ensemble import RandomForestClassifier
                 
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
                 model = RandomForestClassifier(
                     n_estimators=100,
                     random_state=42
                 )
-                model.fit(X_train, y_train)
+                model.fit(X_train_old, y_train_old)
             
             execution_output: |
                 Old model trained and evaluated on the old distribution: 0.913
@@ -1952,6 +2340,19 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
                     'on_new_data': 0.0,
                     'on_old_data': 0.0
                 }
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Load new data
+                X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+                y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+                X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+                y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
                 
                 # Train new model on combined data
                 X_train = pd.concat([X_train_old, X_train_new])
@@ -2008,33 +2409,21 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
         }
     ]
 
-    for example in examples:
-        example["input"] = textwrap.dedent(example["input"]).strip()
-        example["output"] = textwrap.dedent(example["output"]).strip()
-
-    example_prompt = ChatPromptTemplate.from_messages([
-        ("human", "{input}"),
-        ("ai", "{output}"),
-    ])
-    
-    few_shot_prompt = FewShotChatMessagePromptTemplate(
-        example_prompt=example_prompt,
-        examples=examples,
-    )
-
     system_prompt = """
-    You are an expert ML engineer specializing in model selection and implementation.
+    You are an expert ML engineer specializing in model selection and implementation in sklearn.
 
     Context: You have:
     1. Current model code and configuration
     2. Performance metrics from previous run
     3. List of previously tried models
+    4. Dataset folder path from current code
 
     Objective: Select and implement a new model architecture that:
     1. Better handles distribution shifts
     2. Maintains performance on old distribution
     3. Improves performance on new distribution
     4. Uses best practices for the chosen model
+    5. Preserves the dataset folder path from input code
 
     Critical Requirements:
     1. Only save new model metrics to 'slow_graph_metrics.yaml'
@@ -2044,6 +2433,7 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
            on_old_data: [score]
     3. Previous baseline metrics are provided in input
     4. Only use sklearn-compatible models
+    5. Maintain data loading paths from original code
 
     Model Selection Guidelines:
     1. Consider model's ability to handle distribution shifts
@@ -2051,6 +2441,7 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
     3. Implement early stopping when available
     4. Set appropriate default parameters
     5. Don't recompute old model metrics
+    6. Keep dataset folder path consistent
 
     Response Format: Format your response as YAML with:
 
@@ -2071,7 +2462,13 @@ def prompt_model_selection_change() -> ChatPromptTemplate:
 
     final_prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
-        few_shot_prompt,
+        FewShotChatMessagePromptTemplate(
+            example_prompt=ChatPromptTemplate.from_messages([
+                ("human", "{input}"),
+                ("ai", "{output}")
+            ]),
+            examples=examples
+        ),
         ("human", "{input}"),
     ])
 
@@ -2084,6 +2481,13 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
             "input": """
             current_code: |
                 from sklearn.ensemble import GradientBoostingClassifier
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
                 
                 model = GradientBoostingClassifier(
                     n_estimators=100,
@@ -2134,6 +2538,19 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
                     'on_new_data': 0.0,
                     'on_old_data': 0.0
                 }
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Load new data
+                X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+                y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+                X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+                y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
                 
                 # Train new model on combined data
                 X_train = pd.concat([X_train_old, X_train_new])
@@ -2202,28 +2619,31 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
     )
 
     system_prompt = """
-    You are an expert ML engineer specializing in hyperparameter optimization.
+    You are an expert ML engineer specializing in hyperparameter optimization in sklearn.
 
     Context: You have:
     1. Current model code with parameters
     2. Previous baseline metrics from working memory
     3. Current parameter configuration
     4. Model performance history
+    5. Dataset folder path from current code
 
     Objective: Optimize model hyperparameters to:
     1. Improve model robustness across distributions
     2. Better handle distribution shifts
     3. Maintain performance on old distribution
     4. Improve performance on new distribution
+    5. Preserve the dataset folder path from input code
 
     Critical Requirements:
     1. Only save new model metrics to 'slow_graph_metrics.yaml'
     2. Use metrics format:
-       model_new_score:
-           on_new_data: [score]
-           on_old_data: [score]
+    model_new_score:
+        on_new_data: [score]
+        on_old_data: [score]
     3. Previous baseline metrics are provided in input
     4. Only tune parameters available in sklearn models
+    5. Maintain data loading paths from original code
 
     Parameter Tuning Guidelines:
     1. Balance model capacity with generalization
@@ -2232,6 +2652,7 @@ def prompt_hyperparameter_tuning() -> ChatPromptTemplate:
     4. Use validation monitoring
     5. Consider stochastic variants of parameters
     6. Don't recompute old model metrics
+    7. Keep dataset folder path consistent
 
     Response Format: Format your response as YAML with:
 
@@ -2269,6 +2690,13 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
         {
             "input": """
             current_code: |
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
                 from sklearn.ensemble import GradientBoostingClassifier
                 
                 model = GradientBoostingClassifier(
@@ -2302,13 +2730,13 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
             "output": """
             ensemble_type: "stacking"
             estimators:
-              - name: "gradient_boost"
+            - name: "gradient_boost"
                 class: "GradientBoostingClassifier"
                 params:
                     n_estimators: 200
                     learning_rate: 0.05
                     max_depth: 4
-              - name: "random_forest"
+            - name: "random_forest"
                 class: "RandomForestClassifier"
                 params:
                     n_estimators: 200
@@ -2331,6 +2759,19 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
                     'on_new_data': 0.0,
                     'on_old_data': 0.0
                 }
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Load new data
+                X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+                y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+                X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+                y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
                 
                 # Train new model on combined data
                 X_train = pd.concat([X_train_old, X_train_new])
@@ -2418,21 +2859,24 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
     2. Previous models and parameters tried
     3. Previous baseline metrics from working memory
     4. Strategy results from previous attempts
+    5. Dataset folder path from current code
 
     Objective: Create an ensemble that:
     1. Combines successful previous approaches
     2. Improves robustness across distributions
     3. Maintains performance on old distribution
     4. Enhances performance on new distribution
+    5. Preserves the dataset folder path from input code
 
     Critical Requirements:
     1. Only save new model metrics to 'slow_graph_metrics.yaml'
     2. Use metrics format:
-       model_new_score:
-           on_new_data: [score]
-           on_old_data: [score]
+    model_new_score:
+        on_new_data: [score]
+        on_old_data: [score]
     3. Previous baseline metrics are provided in input
     4. Only use sklearn ensemble methods
+    5. Maintain data loading paths from original code
 
     Ensemble Guidelines:
     1. Choose appropriate ensemble type (stacking, voting, bagging)
@@ -2441,6 +2885,7 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
     4. Implement proper weighting strategies
     5. Consider probabilistic combinations
     6. Don't recompute old model metrics
+    7. Keep dataset folder path consistent
 
     Response Format: Format your response as YAML with:
 
@@ -2475,6 +2920,482 @@ def prompt_ensemble_method() -> ChatPromptTemplate:
 
     return final_prompt
 
+
+def prompt_distill_fast_graph_insights() -> ChatPromptTemplate:
+    examples = [
+        {
+            "input": """
+            execution_output: |
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
+                
+                Training new model on combined data...
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
+            model_code: |
+                from sklearn.ensemble import RandomForestClassifier
+                model = RandomForestClassifier(random_state=42)
+                model.fit(X_train, y_train)
+            fast_graph_metrics:
+                old_model:
+                    on_old_data: 0.913
+                    on_new_data: 0.717
+                new_model:
+                    on_old_data: 0.907
+                    on_new_data: 0.800
+            """,
+            "output": """
+            insights:
+              performance_analysis:
+                distribution_gaps:
+                  - "19.6% original gap between distributions (0.913 vs 0.717)"
+                  - "10.7% gap after retraining (0.907 vs 0.800)"
+                  - "8.3% improvement in distribution gap from retraining"
+                improvements:
+                  - "8.3% improvement on new distribution from fast graph retraining"
+                  - "0.6% regression on old distribution from fast graph retraining"
+                key_patterns:
+                  - "Dataset shift successfully addressed by retraining on combined data"
+                  - "Slight performance trade-off between distributions"
+              
+              model_limitations:
+                - "Default RandomForest struggling with distribution generalization"
+                - "No explicit handling of dataset shift"
+                - "Possible underfitting on new distribution"
+                - "Potential overfitting to old distribution"
+              
+              improvement_strategies:
+                model_selection:
+                  priority: "High"
+                  reason: "Try models with better generalization across distributions"
+                  suggestions:
+                    - "GradientBoostingClassifier for better handling of shifted data"
+                    - "XGBoost with regularization for balanced performance"
+                
+                hyperparameter_tuning:
+                  priority: "Medium"
+                  reason: "Optimize RandomForest for better cross-distribution performance"
+                  suggestions:
+                    - "Increase n_estimators (500+) for stability"
+                    - "Add max_depth constraint to prevent overfitting"
+                    - "Try class_weight='balanced' for better distribution handling"
+                
+                ensemble_method:
+                  priority: "High"
+                  reason: "Combine strengths of multiple models for balanced performance"
+                  suggestions:
+                    - "StackingClassifier with both RandomForest and GradientBoosting"
+                    - "VotingClassifier with diverse base estimators"
+              
+              expected_outcomes:
+                - "Reduce distribution gap further to <5%"
+                - "Maintain or improve old distribution performance"
+                - "Improve new distribution performance to >85%"
+                - "Create a more robust model with consistent performance"
+            """
+        }
+    ]
+    
+    for example in examples:
+        example["input"] = textwrap.dedent(example["input"]).strip()
+        example["output"] = textwrap.dedent(example["output"]).strip()
+
+    example_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("human", "{input}"),
+            ("ai", "{output}"),
+        ]
+    )
+    
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=examples,
+    )
+
+    system_prompt = """
+    You are an expert ML engineer analyzing model performance using sklearn components.
+
+    Context: You have access to:
+    1. Performance metrics from Fast Graph retraining on combined data
+    2. Original model performance metrics on both distributions
+    3. Base model code and configuration
+
+    Objective: Analyze the Fast Graph retraining results and provide comprehensive insights about:
+    1. Detailed distribution gap analysis
+    2. Quantified improvements and regressions
+    3. Current model limitations
+    4. Specific strategies for further improvement
+
+    Analysis Requirements:
+    1. Calculate exact distribution gaps before and after retraining
+    2. Evaluate transfer learning effectiveness
+    3. Prioritize improvement strategies based on results
+    4. Focus on sklearn-native solutions
+
+    Response Format: Format your response as YAML with:
+
+    insights:
+      performance_analysis:
+        distribution_gaps:
+          - [Quantified distribution disparities]
+        improvements:
+          - [Quantified metric changes]
+        key_patterns:
+          - [Important trends identified]
+      
+      model_limitations:
+        - [Current model weaknesses]
+      
+      improvement_strategies:
+        model_selection:
+          priority: [High/Medium/Low]
+          reason: [Reasoning]
+          suggestions:
+            - [Specific models to try]
+        
+        hyperparameter_tuning:
+          priority: [High/Medium/Low]
+          reason: [Reasoning]
+          suggestions:
+            - [Specific parameters to adjust]
+            
+        ensemble_method:
+          priority: [High/Medium/Low]
+          reason: [Reasoning]
+          suggestions:
+            - [Specific ensemble approaches]
+      
+      expected_outcomes:
+        - [Expected results from improvements]
+
+    Only provide the YAML-formatted output. No additional commentary.
+    """
+
+    system_prompt = textwrap.dedent(system_prompt).strip()
+
+    final_prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        few_shot_prompt,
+        ("human", "{input}"),
+    ])
+
+    return final_prompt
+
+def prompt_analyze_fast_graph_needs() -> ChatPromptTemplate:
+    examples = [
+        {
+            "input": """
+            current_performance: |
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
+                
+                Training new model on combined data...
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
+            
+            fast_graph_improved: true
+            
+            fast_graph_metrics:
+                old_model:
+                    on_old_data: 0.913
+                    on_new_data: 0.717
+                new_model:
+                    on_old_data: 0.907
+                    on_new_data: 0.800
+                    
+            distribution_gaps:
+                new_distribution: 0.083
+                old_distribution: -0.006
+            
+            strategy_results:
+                model_selection:
+                    tried: false
+                    models_tried: []
+                hyperparameter_tuning:
+                    tried: false
+                ensemble_method:
+                    tried: false
+            """,
+            "output": """
+            recommended_strategy: "model_selection"
+            reasoning: |
+                1. Fast Graph analysis reveals significant distribution shift (19.6% gap)
+                2. Retraining has improved new distribution by 8.3%
+                3. Slight regression on old distribution (-0.6%)
+                4. Remaining gap of 10.7% between distributions indicates need for better model
+                5. No strategies have been tried yet, making model selection the logical first step
+                6. Current RandomForest appears to overfit to old distribution
+            performance_gaps:
+                - "19.6% initial gap between distributions (0.913 vs 0.717)"
+                - "10.7% remaining gap after retraining (0.907 vs 0.800)"
+                - "8.3% improvement on new distribution from fast graph"
+                - "0.6% regression on old distribution from fast graph"
+            tried_strategies: []
+            next_steps:
+                - "Try GradientBoostingClassifier for better handling of distribution shifts"
+                - "Explore models with explicit regularization capabilities"
+                - "Consider models that can detect and adapt to feature importance shifts"
+                - "If model selection shows limited improvement, proceed to ensemble methods"
+            """
+        }
+    ]
+    
+    for example in examples:
+        example["input"] = textwrap.dedent(example["input"]).strip()
+        example["output"] = textwrap.dedent(example["output"]).strip()
+
+    example_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("human", "{input}"),
+            ("ai", "{output}"),
+        ]
+    )
+    
+    few_shot_prompt = FewShotChatMessagePromptTemplate(
+        example_prompt=example_prompt,
+        examples=examples,
+    )
+
+    system_prompt = """
+    You are an expert ML engineer specializing in model improvement strategy analysis.
+
+    Context: You have:
+    1. Results from Fast Graph retraining on combined data
+    2. Original and retrained model performance metrics
+    3. Distribution gap analysis
+    4. List of available strategies to try
+
+    Objective: Analyze the current performance metrics, especially focusing on Fast Graph results,
+    and recommend the next best strategy to further improve the model.
+    
+    Consider:
+    1. Performance gaps between distributions before and after retraining
+    2. Improvements and regressions from Fast Graph retraining
+    3. Previously tried strategies
+    4. Most promising next steps to further improve performance
+
+    Available Strategies (in order of increasing complexity):
+    1. Model Selection: Trying different sklearn algorithms
+    2. Hyperparameter Tuning: Optimizing model configuration
+    3. Ensemble Methods: Combining multiple models
+
+    Strategy Selection Guidelines:
+    - If Fast Graph showed >5% improvement on new distribution with minimal regression on old:
+      Prioritize model_selection to find better baseline models
+    - If Fast Graph improved new distribution but regressed >2% on old:
+      Prioritize hyperparameter_tuning to balance performance
+    - If Fast Graph showed modest improvements on both distributions:
+      Prioritize ensemble_method to combine strengths
+    - Always consider untried strategies first
+
+    Response Format: Format your response as YAML with:
+
+    recommended_strategy: [strategy_name]
+    reasoning: |
+      [Numbered list of reasons for recommendation]
+    performance_gaps:
+      - [Quantified performance differences]
+    tried_strategies:
+      - [List of attempted strategies]
+    next_steps:
+      - [Concrete actions to take]
+
+    Only provide the YAML-formatted output. No additional commentary.
+    """
+
+    system_prompt = textwrap.dedent(system_prompt).strip()
+
+    final_prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        few_shot_prompt,
+        ("human", "{input}"),
+    ])
+    
+    return final_prompt
+
+def prompt_model_selection_from_fast_graph() -> ChatPromptTemplate:
+    examples = [
+        {
+            "input": """
+            current_code: |
+                from sklearn.ensemble import RandomForestClassifier
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                model = RandomForestClassifier(
+                    n_estimators=100,
+                    random_state=42
+                )
+                model.fit(X_train_old, y_train_old)
+            
+            execution_output: |
+                Old model trained and evaluated on the old distribution: 0.913
+                Old model evaluated on the new distribution: 0.717
+                
+                Training new model on combined data...
+                New model trained and evaluated on old distribution: 0.907
+                New model evaluated on new distribution: 0.800
+            
+            models_tried: []
+            
+            fast_graph_improved: true
+            
+            fast_graph_metrics:
+                old_model:
+                    on_old_data: 0.913
+                    on_new_data: 0.717
+                new_model:
+                    on_old_data: 0.907
+                    on_new_data: 0.800
+            """,
+            "output": """
+            model_name: "GradientBoostingClassifier"
+            new_training_code: |
+                import yaml
+                import pandas as pd
+                from sklearn.ensemble import GradientBoostingClassifier
+                from sklearn.metrics import accuracy_score
+                
+                # Initialize metrics dictionary
+                model_new_score = {
+                    'on_new_data': 0.0,
+                    'on_old_data': 0.0
+                }
+                
+                # Load data from specified folder
+                dataset_folder = "datasets/financial"
+                X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+                X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+                y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+                y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+                
+                # Load new data
+                X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+                y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+                X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+                y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+                
+                # Train new model on combined data
+                X_train = pd.concat([X_train_old, X_train_new])
+                y_train = pd.concat([y_train_old, y_train_new])
+                
+                model_new = GradientBoostingClassifier(
+                    n_estimators=100,
+                    learning_rate=0.1,
+                    max_depth=5,
+                    subsample=0.8,
+                    random_state=42
+                )
+                
+                model_new.fit(X_train, y_train)
+                
+                # Evaluate new model on old test set
+                new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+                print(f'New model trained and evaluated on old distribution: {new_score_old}')
+                model_new_score['on_old_data'] = float(new_score_old)
+                
+                # Evaluate new model on new test set
+                new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
+                print(f'New model evaluated on new distribution: {new_score_new}')
+                model_new_score['on_new_data'] = float(new_score_new)
+                
+                # Save metrics
+                with open('slow_graph_metrics.yaml', 'w') as f:
+                    yaml.dump({'model_new_score': model_new_score}, f)
+            
+            changes_made:
+              - "Switched from RandomForest to GradientBoosting"
+              - "Used combined training data from fast graph approach"
+              - "Added subsample=0.8 for better generalization"
+              - "Set max_depth=5 to avoid overfitting to old distribution"
+              - "Used slow_graph_metrics.yaml for output"
+              
+            parameters:
+                n_estimators: 100
+                learning_rate: 0.1
+                max_depth: 5
+                subsample: 0.8
+            
+            rationale: |
+                GradientBoostingClassifier selected because:
+                1. Fast Graph showed significant distribution gap (19.6%)
+                2. Fast Graph improved new distribution but slightly regressed on old
+                3. GradientBoosting tends to handle distribution shifts better than RandomForest
+                4. Sequential learning in GradientBoosting adapts better to combined datasets
+                5. Controlled tree depth (max_depth=5) to prevent overfitting to old distribution
+                6. Stochastic components (subsample=0.8) to improve generalization
+            """
+        }
+    ]
+
+    system_prompt = """
+    You are an expert ML engineer specializing in model selection based on Fast Graph retraining results.
+
+    Context: You have:
+    1. Results from Fast Graph retraining on combined data
+    2. Original model code and metrics
+    3. Distribution gap analysis
+    4. List of previously tried models
+
+    Objective: Select and implement a new model architecture that:
+    1. Builds upon the Fast Graph's combined-data approach
+    2. Addresses any identified distribution gaps
+    3. Maintains or improves performance on both distributions
+    4. Uses best practices for the chosen model
+
+    Critical Requirements:
+    1. Save new model metrics to 'slow_graph_metrics.yaml' (not fast_graph_metrics.yaml)
+    2. Use metrics format:
+       model_new_score:
+           on_new_data: [score]
+           on_old_data: [score]
+    3. Use the combined dataset approach from Fast Graph
+    4. Only use sklearn-compatible models
+    5. Maintain data loading paths from original code
+
+    Model Selection Guidelines:
+    1. If Fast Graph showed >5% improvement on new distribution with minimal old distribution regression:
+       Consider models with strong transfer learning capabilities
+    2. If Fast Graph showed regression on old distribution:
+       Focus on models with regularization to balance performance
+    3. If Fast Graph showed moderate improvements across both distributions:
+       Select models with robust generalization capabilities
+
+    Response Format: Format your response as YAML with:
+
+    model_name: [selected_model_name]
+    new_training_code: |
+      [COMPLETE IMPLEMENTATION]
+    changes_made:
+      - [List of significant changes]
+    parameters:
+      [Dictionary of key parameters]
+    rationale: |
+      [Detailed explanation of model choice]
+
+    Only provide the YAML-formatted output. No additional commentary.
+    """
+
+    system_prompt = textwrap.dedent(system_prompt).strip()
+
+    final_prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        FewShotChatMessagePromptTemplate(
+            example_prompt=ChatPromptTemplate.from_messages([
+                ("human", "{input}"),
+                ("ai", "{output}")
+            ]),
+            examples=examples
+        ),
+        ("human", "{input}"),
+    ])
+
+    return final_prompt
 
 def prompt_summarize_monitoring_report() -> ChatPromptTemplate:
     examples = [

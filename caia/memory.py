@@ -1,8 +1,8 @@
 from docarray import BaseDoc, DocList
 from typing import Optional, Dict, Any, TypedDict, List, Annotated
-# from caia.insight import QuickInsight, DeepInsight
+
 import pandas as pd
-from caia.representation import DatasetRepresentation
+
 from caia.tools import Tool
 from operator import add
 
@@ -26,7 +26,7 @@ class SemanticMemory(BaseDoc):
 class EpisodicMemory(BaseDoc):
     dataset_new: Dataset
     quick_insight: Dict[str, Any]
-    deep_insight: Dict[str, Any]
+    deep_insight: Optional[Dict[str, Any]]
 
 
 class ModelScore(TypedDict):
@@ -58,7 +58,8 @@ def create_improvement_entry(
     strategy_type: Optional[str],
     old_model_score: ModelScore,
     new_model_score: ModelScore,
-    changes_made: Dict[str, Any]
+    changes_made: Dict[str, Any],
+    iteration=1  # Add default parameter
 ) -> ImprovementEntry:
     """Helper function to create an ImprovementEntry with proper metrics calculation"""
     
@@ -81,6 +82,7 @@ def create_improvement_entry(
             'new_model': new_model_score
         },
         'changes_made': changes_made,
+        'iteration': iteration,
         'outcome': outcome,
         'improvements': improvements
     }
@@ -93,4 +95,5 @@ class WorkingMemory(TypedDict):
     generations_fast_graph: Dict[str, Any]
     generations_slow_graph: Dict[str, Any]
     
+    max_iterations: Optional[int]
     improvement_history: Annotated[List[ImprovementEntry], add]

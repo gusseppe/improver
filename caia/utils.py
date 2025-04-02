@@ -29,6 +29,44 @@ from langgraph.prebuilt.tool_executor import ToolExecutor
 from langchain.tools.render import ToolsRenderer, render_text_description
 
 
+class ChatOpenRouter(ChatOpenAI):
+    openai_api_base: str
+    openai_api_key: str
+    model_name: str
+
+    def __init__(self,
+                 model_name: str,
+                 openai_api_key: Optional[str] = None,
+                 openai_api_base: str = "https://openrouter.ai/api/v1",
+                 **kwargs):
+        openai_api_key = openai_api_key or os.getenv('OPENROUTER_API_KEY')
+        super().__init__(openai_api_base=openai_api_base,
+                         openai_api_key=openai_api_key,
+                         model_name=model_name, **kwargs)
+        
+def save_yaml_results(state, output_path):
+    """
+    Save the YAML results to a file.
+    
+    Args:
+        state: The final state containing yaml_output
+        output_path: Path to save the YAML file
+    """
+    import yaml
+    import os
+    
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Extract the YAML output
+    yaml_output = state.get("yaml_output", {})
+    
+    # Save to file
+    with open(output_path, 'w') as f:
+        yaml.dump(yaml_output, f, default_flow_style=False, sort_keys=False)
+        
+    print(f"Results saved to: {output_path}")
+    
 def get_model_params(model):
     if hasattr(model, 'get_params'):  # Works for scikit-learn, XGBoost
         return model.get_params()
@@ -596,6 +634,281 @@ def evaluate_answers_with_unknowns(ground_truth: List[Dict[str, str]], generated
 
     return accuracy_score, unknown_ratio
 
+
+def save_fast_graph_results(output_fast_graph, dataset_folder, llm_name):
+    """Save fast graph results with dataset and LLM information.
+    
+    Args:
+        output_fast_graph: Output from fast graph execution
+        dataset_folder: Path to dataset folder (e.g., "datasets/financial")
+        llm_name: Name of the LLM used (e.g., "llama-3.1-8b-instant")
+    """
+    import os
+    import json
+    import shutil
+    from datetime import datetime
+    
+    # Extract dataset name from folder path
+    dataset_name = os.path.basename(dataset_folder)
+    
+    # Get timestamp (only for detailed results)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Extract results from fast graph output
+    if 'execute_retraining_code' in output_fast_graph:
+        results = output_fast_graph['execute_retraining_code']
+        
+        if 'improvement_history' in results and results['improvement_history']:
+            latest_improvement = results['improvement_history'][-1]
+            
+            # Create results summary
+            summary = {
+                'metadata': {
+                    'dataset': dataset_name,
+                    'llm': llm_name,
+                    'timestamp': timestamp,
+                    'graph_type': 'fast'
+                },
+                'metrics': {
+                    'old_model': latest_improvement['metrics']['old_model'],
+                    'new_model': latest_improvement['metrics']['new_model']
+                },
+                'improvements': latest_improvement['improvements'],
+                'outcome': latest_improvement['outcome']
+            }
+            
+            # Create results directory if it doesn't exist
+            os.makedirs('results', exist_ok=True)
+            
+            # Update filenames to include dataset and llm in metrics files
+            old_metrics_filename = f'old_metrics_{dataset_name}_{llm_name}.yaml'
+            fast_graph_metrics_filename = f'fast_graph_metrics_{dataset_name}_{llm_name}.yaml'
+            
+            # Copy the existing metrics files instead of renaming
+            if os.path.exists('old_metrics.yaml'):
+                shutil.copy2('old_metrics.yaml', os.path.join('results', old_metrics_filename))
+            if os.path.exists('fast_graph_metrics.yaml'):
+                shutil.copy2('fast_graph_metrics.yaml', os.path.join('results', fast_graph_metrics_filename))
+            
+            # Save detailed results (keeping timestamp for this one to track different runs)
+            detailed_filename = f'results/fast_graph_{dataset_name}_{llm_name}_{timestamp}.json'
+            with open(detailed_filename, 'w') as f:
+                json.dump(summary, f, indent=2)
+            
+            # Save summary metrics in CSV format for easy tracking
+            import pandas as pd
+            
+            summary_data = {
+                'timestamp': timestamp,
+                'dataset': dataset_name,
+                'llm': llm_name,
+                'old_model_old_data': latest_improvement['metrics']['old_model']['on_old_data'],
+                'old_model_new_data': latest_improvement['metrics']['old_model']['on_new_data'],
+                'new_model_old_data': latest_improvement['metrics']['new_model']['on_old_data'],
+                'new_model_new_data': latest_improvement['metrics']['new_model']['on_new_data'],
+                'improvement_old_dist': latest_improvement['improvements']['old_distribution'],
+                'improvement_new_dist': latest_improvement['improvements']['new_distribution'],
+                'outcome': latest_improvement['outcome']
+            }
+            
+            # Create or append to CSV with dataset and llm in filename
+            csv_filename = f'results/fast_graph_results_{dataset_name}_{llm_name}.csv'
+            df = pd.DataFrame([summary_data])
+            
+            if os.path.exists(csv_filename):
+                df.to_csv(csv_filename, mode='a', header=False, index=False)
+            else:
+                df.to_csv(csv_filename, index=False)
+                
+            print(f"Results saved:")
+            print(f"- Old metrics: {os.path.join('results', old_metrics_filename)}")
+            print(f"- Fast graph metrics: {os.path.join('results', fast_graph_metrics_filename)}")
+            print(f"- Detailed results: {detailed_filename}")
+            print(f"- Summary metrics: {csv_filename}")
+    else:
+        print("No results found in fast graph output")
+
+
+def save_slow_graph_results(output_slow_graph, dataset_folder, llm_name):
+   """Save slow graph results with dataset and LLM information.
+   
+   Args:
+       output_slow_graph: Output from slow graph execution
+       dataset_folder: Path to dataset folder (e.g., "datasets/financial")
+       llm_name: Name of the LLM used (e.g., "llama-3.1-8b-instant")
+   """
+   import os
+   import json
+   import shutil
+   from datetime import datetime
+   
+   # Extract dataset name from folder path
+   dataset_name = os.path.basename(dataset_folder)
+   
+   # Get timestamp (only for detailed results)
+   timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+   
+   # Extract results from slow graph output
+   if list(output_slow_graph.keys())[0] in output_slow_graph:
+       results = output_slow_graph[list(output_slow_graph.keys())[0]]
+       generations = results['generations_slow_graph']
+       improvement_history = results['improvement_history']
+       
+       if improvement_history:
+           # Create results summary including full history
+           summary = {
+               'metadata': {
+                   'dataset': dataset_name,
+                   'llm': llm_name,
+                   'timestamp': timestamp,
+                   'graph_type': 'slow',
+                   'total_improvements': len(improvement_history)
+               },
+               'improvement_history': [
+                   {
+                       'iteration': idx,
+                       'metrics': improvement['metrics'],
+                       'strategy_type': improvement['strategy_type'],
+                       'improvements': improvement['improvements'],
+                       'outcome': improvement['outcome'],
+                       'changes_made': improvement['changes_made']
+                   } for idx, improvement in enumerate(improvement_history)
+               ],
+               'strategy_info': {
+                   'current_strategy': generations.get('current_strategy'),
+                   'strategy_results': generations.get('strategy_results'),
+                   'strategy_analysis': generations.get('strategy_analysis')
+               },
+               'distilled_insights': generations.get('distilled_insights'),
+               'final_evaluation': generations.get('evaluation')
+           }
+           
+           # Create results directory if it doesn't exist
+           os.makedirs('results', exist_ok=True)
+           
+           # Update filenames to include dataset and llm in metrics files
+           old_metrics_filename = f'old_metrics_{dataset_name}_{llm_name}_slow.yaml'
+           slow_graph_metrics_filename = f'slow_graph_metrics_{dataset_name}_{llm_name}.yaml'
+           
+           # Copy the existing metrics files instead of renaming
+           if os.path.exists('old_metrics.yaml'):
+               shutil.copy2('old_metrics.yaml', os.path.join('results', old_metrics_filename))
+           if os.path.exists('slow_graph_metrics.yaml'):
+               shutil.copy2('slow_graph_metrics.yaml', os.path.join('results', slow_graph_metrics_filename))
+           
+           # Save detailed results (keeping timestamp for this one to track different runs)
+           detailed_filename = f'results/slow_graph_{dataset_name}_{llm_name}_{timestamp}.json'
+           with open(detailed_filename, 'w') as f:
+               json.dump(summary, f, indent=2)
+           
+           # Save summary metrics in CSV format for easy tracking
+           import pandas as pd
+           
+           # Create summary data for each improvement iteration
+           summary_data_list = []
+           for idx, improvement in enumerate(improvement_history):
+               summary_data = {
+                   'timestamp': timestamp,
+                   'dataset': dataset_name,
+                   'llm': llm_name,
+                   'iteration': idx,
+                   'strategy': improvement['strategy_type'] or 'unknown',
+                   'old_model_old_data': improvement['metrics']['old_model']['on_old_data'],
+                   'old_model_new_data': improvement['metrics']['old_model']['on_new_data'],
+                   'new_model_old_data': improvement['metrics']['new_model']['on_old_data'],
+                   'new_model_new_data': improvement['metrics']['new_model']['on_new_data'],
+                   'improvement_old_dist': improvement['improvements']['old_distribution'],
+                   'improvement_new_dist': improvement['improvements']['new_distribution'],
+                   'outcome': improvement['outcome']
+               }
+               summary_data_list.append(summary_data)
+           
+           # Create or append to CSV with dataset and llm in filename
+           csv_filename = f'results/slow_graph_results_{dataset_name}_{llm_name}.csv'
+           df = pd.DataFrame(summary_data_list)
+           
+           if os.path.exists(csv_filename):
+               df.to_csv(csv_filename, mode='a', header=False, index=False)
+           else:
+               df.to_csv(csv_filename, index=False)
+               
+           print(f"Results saved:")
+           print(f"- Old metrics: {os.path.join('results', old_metrics_filename)}")
+           print(f"- Slow graph metrics: {os.path.join('results', slow_graph_metrics_filename)}")
+           print(f"- Detailed results: {detailed_filename}")
+           print(f"- Summary metrics: {csv_filename}")
+           print(f"Total improvements recorded: {len(improvement_history)}")
+   else:
+       print("No results found in slow graph output")
+
+import yaml
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
+def plot_improvements(dataset_folder, llm_name):
+    # Extract dataset name from folder path
+    dataset_name = os.path.basename(dataset_folder)
+    
+    # Create results directory if it doesn't exist
+    os.makedirs('results', exist_ok=True)
+    
+    # Read the YAML files (from results folder with dataset and llm_name)
+    with open(f'results/old_metrics_{dataset_name}_{llm_name}.yaml', 'r') as f:
+        old_data = yaml.safe_load(f)
+    with open(f'results/fast_graph_metrics_{dataset_name}_{llm_name}.yaml', 'r') as f:
+        fast_data = yaml.safe_load(f)
+    with open(f'results/slow_graph_metrics_{dataset_name}_{llm_name}.yaml', 'r') as f:
+        slow_data = yaml.safe_load(f)
+
+    # Prepare data for plotting
+    iterations = ['Baseline', 'Fast Graph', 'Slow Graph']
+    old_distribution = [
+        old_data['model_old_score']['on_old_data'],
+        fast_data['model_new_score']['on_old_data'],
+        slow_data['model_new_score']['on_old_data']
+    ]
+    new_distribution = [
+        old_data['model_old_score']['on_new_data'],
+        fast_data['model_new_score']['on_new_data'],
+        slow_data['model_new_score']['on_new_data']
+    ]
+    
+    # Calculate averages
+    averages = [(old + new) / 2 for old, new in zip(old_distribution, new_distribution)]
+
+    # Create figure and axis
+    plt.figure(figsize=(12, 6))
+    x = np.arange(len(iterations))
+    width = 0.35
+
+    # Plot bars
+    plt.bar(x - width/2, old_distribution, width, label='Old distribution', color='#8884d8', alpha=0.7)
+    plt.bar(x + width/2, new_distribution, width, label='New distribution', color='#82ca9d', alpha=0.7)
+    plt.plot(x, averages, 'r--', label='Average', linewidth=2, marker='o')
+
+    # Customize plot
+    plt.xlabel('Improvement iteration')
+    plt.ylabel('Performance score')
+    plt.title(f'Agent performance | Dataset: {dataset_name} | LLM: {llm_name}')
+    plt.xticks(x, iterations)
+    plt.ylim(0, 1)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(loc='lower left')
+
+    # Add value labels
+    for i, (old, new, avg) in enumerate(zip(old_distribution, new_distribution, averages)):
+        plt.text(i - width/2, old, f'{old:.3f}', ha='center', va='bottom')
+        plt.text(i + width/2, new, f'{new:.3f}', ha='center', va='bottom')
+        plt.text(i, avg, f'avg: {avg:.3f}', ha='center', va='bottom', color='red')
+
+    plt.tight_layout()
+    
+    # Save figure with concatenated filename
+    plt.savefig(f'results/improvement_plot_{dataset_name}_{llm_name}.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.close()
+  
 
 class ReflectionReportGenerator:
     def __init__(self, llm=None):

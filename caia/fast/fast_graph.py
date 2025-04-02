@@ -1,11 +1,9 @@
 import textwrap
 import yaml
-
 from time import sleep
 from rich import print
 from rich.panel import Panel
 from rich.text import Text
-
 from langgraph.graph import StateGraph, END
 from IPython.display import Image, display
 from caia.memory import WorkingMemory
@@ -13,13 +11,14 @@ from caia.utils import print_function_name
 from caia.prompts import (
     # prompt_measure_criticality,
     prompt_generate_retraining_code,
+    prompt_generate_retraining_code_with_insights,  # Added new prompt function
     prompt_execute_and_fix_retraining_code
 )
-
 from autogen import ConversableAgent
 from autogen.coding import LocalCommandLineCodeExecutor
 from typing import TypedDict, Dict, Optional
-from caia.memory import ModelScore, ImprovementEntry, create_improvement_entry
+from caia.memory import create_improvement_entry
+from datetime import datetime
 
 class FastGraph:
     def __init__(self, llm, debug=False):
@@ -27,14 +26,14 @@ class FastGraph:
         self.graph = EnhancedStateGraph(WorkingMemory)
         self.build_plan()
         self.decision_procedure = self.graph.compile(debug=debug)
-
+        self.start_time = None
+        
     def draw_graph(self):
         return display(Image(self.decision_procedure.get_graph().draw_mermaid_png()))
-
+        
     def build_plan(self):
         # Add nodes
         # self.graph.add_node('measure_criticality', self.measure_criticality)
-
         self.graph.add_node('generate_retraining_code', self.generate_retraining_code)
         self.graph.add_node('execute_retraining_code', self.execute_retraining_code)
         self.graph.add_node('fix_retraining_code', self.fix_retraining_code)
@@ -59,27 +58,9 @@ class FastGraph:
         
         # Add edge from fix_retraining_code back to execute_retraining_code
         self.graph.add_edge('fix_retraining_code', 'execute_retraining_code')
-
-    # def measure_criticality(self, state: WorkingMemory) -> WorkingMemory:
-        
-    #     # Prepare the monitoring report for analysis
-    #     monitoring_report = state['monitoring_report']
-        
-    #     # Create the prompt for the LLM
-    #     prompt = prompt_measure_criticality()
-        
-    #     # Invoke the LLM
-    #     chain = prompt | self.llm
-    #     output = chain.invoke({'input': monitoring_report}).content
-        
-    #     # Update the state with the analysis result
-    #     state['generations_fast_graph']['criticality_analysis'] = output
-        
-        
-    #     return state
     
-
     def generate_retraining_code(self, state: WorkingMemory) -> WorkingMemory:
+        """Generate retraining code, utilizing insights from slow graph if available."""
         try:
             episodic_memory = state['episodic_memory']
             semantic_memory = state['semantic_memory']
@@ -87,21 +68,45 @@ class FastGraph:
             if not semantic_memory.model_code:
                 raise ValueError("No model code found in semantic memory")
             
-            training_code = semantic_memory.model_code
-            new_data = (
-                'X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")\n'
-                'X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")\n'
-                'y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")\n'
-                'y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")\n'
-            )
-
             # Initialize generations dictionary if not present
             if 'generations_fast_graph' not in state:
                 state['generations_fast_graph'] = {}
-
-            # Create the prompt and prepare YAML content
-            prompt = prompt_generate_retraining_code()
-            yaml_content = self._prepare_yaml_content(training_code, new_data)
+                
+            # Check if we have slow graph insights to leverage
+            has_slow_graph_insights = (
+                'generations_slow_graph' in state and 
+                isinstance(state['generations_slow_graph'], dict) and 
+                'yaml_output' in state['generations_slow_graph']
+            )
+            
+            # Get the appropriate training code
+            training_code = semantic_memory.model_code
+            dataset_folder = "/".join(semantic_memory.dataset_old.X_train.split("/")[:2])
+            new_data = (
+                f'X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")\n'
+                f'X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")\n'
+                f'y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")\n'
+                f'y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")\n'
+            )
+            
+            # Choose the appropriate prompt based on availability of slow graph insights
+            if has_slow_graph_insights:
+                print("Using insights from slow graph to enhance retraining code generation")
+                # Get the improved model code from slow graph output
+                improved_model_code = state['generations_slow_graph']['yaml_output']['final_code']
+                
+                # Prepare YAML content with improved model code
+                yaml_content = self._prepare_yaml_content_with_insights(training_code, improved_model_code)
+                
+                # Use the enhanced prompt
+                prompt = prompt_generate_retraining_code_with_insights()
+            else:
+                print("No slow graph insights available, using basic retraining approach")
+                # Prepare basic YAML content
+                yaml_content = self._prepare_yaml_content(training_code, new_data)
+                
+                # Use the standard prompt
+                prompt = prompt_generate_retraining_code()
             
             # Invoke the LLM
             chain = prompt | self.llm
@@ -122,6 +127,23 @@ class FastGraph:
             print(f"Error in generate_retraining_code: {str(e)}")
             state['generations_fast_graph']['error'] = str(e)
             return state
+            
+    def _prepare_yaml_content_with_insights(self, training_code: str, improved_model_code: str) -> str:
+        """Helper method to prepare YAML content with improved model code from slow graph."""
+        # Clean and indent the code
+        cleaned_training_code = textwrap.dedent(training_code).strip()
+        indented_training_code = textwrap.indent(cleaned_training_code, '  ')
+        
+        cleaned_improved_code = textwrap.dedent(improved_model_code).strip()
+        indented_improved_code = textwrap.indent(cleaned_improved_code, '  ')
+        
+        # Create the YAML content with old training code and improved model code
+        return (
+            f"old_training_code: |\n"
+            f"{indented_training_code}\n"
+            f"improved_model_code: |\n"
+            f"{indented_improved_code}\n"
+        )
 
     def _prepare_yaml_content(self, training_code: str, new_data: str) -> str:
         """Helper method to prepare YAML content."""
@@ -138,7 +160,6 @@ class FastGraph:
             f"{indented_new_data}\n"
         )
         
-
     def execute_retraining_code(self, state: WorkingMemory) -> WorkingMemory:
         """Execute retraining code and track improvements"""
         # Get the current code from the most recent episodic memory
@@ -180,7 +201,7 @@ class FastGraph:
                     new_metrics = yaml.safe_load(f)
                     new_model_score = new_metrics['model_new_score']
                     state['generations_fast_graph'].update(new_metrics)
-
+                
                 # Create improvement entry
                 improvement_entry = create_improvement_entry(
                     previous_code=state['semantic_memory'].model_code,
@@ -194,7 +215,7 @@ class FastGraph:
                         'iteration_count': state['generations_fast_graph'].get('iteration_count', 0)
                     }
                 )
-
+                
                 # Initialize improvement_history if it doesn't exist
                 if 'improvement_history' not in state:
                     state['improvement_history'] = []
@@ -204,6 +225,11 @@ class FastGraph:
                 
                 state['generations_fast_graph']['execution_success'] = True
                 
+                # Also extract metrics directly from console output as a backup verification
+                extracted_metrics = self._extract_metrics_from_output(execution_output)
+                if extracted_metrics:
+                    state['generations_fast_graph']['extracted_metrics'] = extracted_metrics
+                
             except Exception as e:
                 print(f"Error processing metrics and creating improvement entry: {str(e)}")
                 state['generations_fast_graph']['execution_success'] = False
@@ -211,10 +237,10 @@ class FastGraph:
             state['generations_fast_graph']['execution_success'] = False
         
         # Increment the iteration count
-        state['generations_fast_graph']['iteration_count'] = state.get('iteration_count', 0) + 1
+        state['generations_fast_graph']['iteration_count'] = state['generations_fast_graph'].get('iteration_count', 0) + 1
         
         return state
-
+        
     def fix_retraining_code(self, state: WorkingMemory) -> WorkingMemory:
         current_code_yaml = state['generations_fast_graph'].get('fixed_code') or state['generations_fast_graph']['new_training_code']
         parsed_yaml = yaml.safe_load(current_code_yaml)
@@ -247,7 +273,7 @@ class FastGraph:
         state['generations_fast_graph']['fixed_code'] = output
         
         return state
-
+        
     def should_fix_code(self, state: WorkingMemory) -> str:
         """Determine if code should be fixed or execution should end"""
         if state['generations_fast_graph']['execution_success']:
@@ -274,14 +300,146 @@ class FastGraph:
             return 'end'
         else:
             return 'fix'
-
-
+    
+    def _extract_metrics_from_output(self, output: str) -> Dict:
+        """Extract metrics from execution output as a verification mechanism."""
+        import re
+        
+        metrics = {
+            'model_old_score': {'on_old_data': 0.0, 'on_new_data': 0.0},
+            'model_new_score': {'on_old_data': 0.0, 'on_new_data': 0.0}
+        }
+        
+        # Extract old model scores
+        old_on_old_match = re.search(r'Old model trained and evaluated on the old distribution: (\d+\.\d+)', output)
+        if old_on_old_match:
+            metrics['model_old_score']['on_old_data'] = float(old_on_old_match.group(1))
+            
+        old_on_new_match = re.search(r'Old model evaluated on the new distribution: (\d+\.\d+)', output)
+        if old_on_new_match:
+            metrics['model_old_score']['on_new_data'] = float(old_on_new_match.group(1))
+            
+        # Extract new model scores
+        new_on_old_match = re.search(r'New model (trained and )?evaluated on old distribution: (\d+\.\d+)', output)
+        if new_on_old_match:
+            metrics['model_new_score']['on_old_data'] = float(new_on_old_match.group(2))
+            
+        new_on_new_match = re.search(r'New model evaluated on new distribution: (\d+\.\d+)', output)
+        if new_on_new_match:
+            metrics['model_new_score']['on_new_data'] = float(new_on_new_match.group(1))
+            
+        return metrics
+            
+    def export_results_to_yaml(self, state: WorkingMemory, runtime_seconds: float) -> Dict:
+        """Format results to match standardized YAML output."""
+        # Get the initial code from semantic memory
+        initial_code = state['semantic_memory'].model_code if 'semantic_memory' in state else ""
+        
+        # Get the current retraining code
+        current_code_yaml = state['generations_fast_graph'].get('fixed_code') or state['generations_fast_graph']['new_training_code']
+        parsed_yaml = yaml.safe_load(current_code_yaml)
+        final_code = parsed_yaml['new_training_code']
+        
+        # Prioritize metrics in this order:
+        # 1. metrics extracted from console output (most reliable)
+        # 2. metrics from the model_*_score dictionaries
+        
+        # Start with console-extracted metrics as most reliable source
+        console_metrics = state['generations_fast_graph'].get('extracted_metrics', {})
+        
+        # Extract initial metrics
+        initial_metrics = {}
+        if console_metrics and 'model_old_score' in console_metrics:
+            initial_metrics = {
+                "old_distribution": console_metrics['model_old_score'].get("on_old_data", 0),
+                "new_distribution": console_metrics['model_old_score'].get("on_new_data", 0)
+            }
+        elif 'model_old_score' in state['generations_fast_graph']:
+            old_model_score = state['generations_fast_graph']['model_old_score']
+            initial_metrics = {
+                "old_distribution": old_model_score.get("on_old_data", 0),
+                "new_distribution": old_model_score.get("on_new_data", 0)
+            }
+            
+        # Extract final metrics
+        final_metrics = {}
+        if console_metrics and 'model_new_score' in console_metrics:
+            final_metrics = {
+                "old_distribution": console_metrics['model_new_score'].get("on_old_data", 0),
+                "new_distribution": console_metrics['model_new_score'].get("on_new_data", 0)
+            }
+        elif 'model_new_score' in state['generations_fast_graph']:
+            new_model_score = state['generations_fast_graph']['model_new_score']
+            final_metrics = {
+                "old_distribution": new_model_score.get("on_old_data", 0),
+                "new_distribution": new_model_score.get("on_new_data", 0)
+            }
+            
+        # Build improvement path from improvement history
+        improvement_path = []
+        if 'improvement_history' in state and state['improvement_history']:
+            for i, entry in enumerate(state['improvement_history']):
+                # Extract changes
+                changes = []
+                if 'changes_made' in entry:
+                    for key, value in entry['changes_made'].items():
+                        if isinstance(value, bool) and value:
+                            changes.append(f"Applied {key}")
+                        elif not isinstance(value, bool):
+                            changes.append(f"{key}: {value}")
+                
+                # Create standard path entry
+                path_entry = {
+                    "iteration": i + 1,
+                    "code": entry.get('new_code', final_code),
+                    "metrics": {
+                        "old_distribution": entry.get('metrics', {}).get('old_distribution', final_metrics.get("old_distribution", 0)),
+                        "new_distribution": entry.get('metrics', {}).get('new_distribution', final_metrics.get("new_distribution", 0))
+                    },
+                    "changes": changes,
+                    "reflection": f"Fast retraining execution output:\n{state['generations_fast_graph'].get('execution_output', '')}"
+                }
+                improvement_path.append(path_entry)
+        
+        # If no improvement history, create a default entry
+        if not improvement_path and final_metrics:
+            default_changes = ["Applied retraining on combined data"]
+            if state['generations_fast_graph'].get('iteration_count', 0) > 1:
+                default_changes.append(f"Fixed code execution issues ({state['generations_fast_graph'].get('iteration_count', 0)} iterations)")
+                
+            improvement_path = [{
+                "iteration": 1,
+                "code": final_code,
+                "metrics": final_metrics,
+                "changes": default_changes,
+                "reflection": f"Fast retraining execution output:\n{state['generations_fast_graph'].get('execution_output', '')}"
+            }]
+            
+        # Build the standardized output
+        return {
+            "agent_name": "fast",
+            "initial_code": initial_code,
+            "initial_metrics": initial_metrics,
+            "improvement_path": improvement_path,
+            "final_code": final_code,
+            "final_metrics": final_metrics,
+            "runtime_statistics": {
+                "total_time_seconds": runtime_seconds,
+                "iterations": state['generations_fast_graph'].get('iteration_count', 0),
+                "tokens_used": len(final_code) // 4,
+                "evaluation_timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+        }
+    
     def run(self, initial_state: WorkingMemory):
-        """Run the fast graph improvement process with enhanced logging"""
+        """Run the fast graph improvement process with enhanced logging and standardized output"""
+        self.start_time = datetime.now()
         output_keys = ['generations_fast_graph', 'improvement_history']
         visited_keys = []
+        final_output = None
         
         for output in self.decision_procedure.stream(initial_state, output_keys=output_keys, debug=False):
+            final_output = output
             for node_name, state in output.items():
                 # Print generations updates
                 for k, v in state['generations_fast_graph'].items():
@@ -291,7 +449,6 @@ class FastGraph:
                         panel = Panel(content, title=title)
                         print(panel)
                         visited_keys.append(k)
-
                 # Print improvement history updates
                 if 'improvement_history' in state and state['improvement_history']:
                     latest_improvement = state['improvement_history'][-1]
@@ -306,8 +463,27 @@ class FastGraph:
                         panel = Panel(content, title=title)
                         print(panel)
                         visited_keys.append('latest_improvement')
-
-        return output
+        
+        # Calculate runtime
+        end_time = datetime.now()
+        runtime_seconds = (end_time - self.start_time).total_seconds()
+        
+        # Get the final state
+        final_state = final_output[list(final_output.keys())[-1]]
+        
+        # Extract metrics from the execution output as a verification/backup
+        if 'generations_fast_graph' in final_state and 'execution_output' in final_state['generations_fast_graph']:
+            console_metrics = self._extract_metrics_from_output(final_state['generations_fast_graph']['execution_output'])
+            if console_metrics:
+                final_state['generations_fast_graph']['extracted_metrics'] = console_metrics
+        
+        # Generate the standardized YAML output
+        yaml_output = self.export_results_to_yaml(final_state, runtime_seconds)
+        
+        # Add the YAML output to the state
+        final_state['yaml_output'] = yaml_output
+        
+        return final_state
 
 class EnhancedStateGraph(StateGraph):
     def add_node(self, node_name, function):
