@@ -3,3 +3,4 @@ local_cache/
 misc/*
 .cache/
 .vscode/
+tmp_code*
