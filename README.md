@@ -1,68 +1,109 @@
-# Cognitive Architecture for ML Monitoring
+# KC-Agent: A Dual-Process Cognitive Architecture for ML Model Improvement
 
-This repository contains the implementation of a cognitive architecture for monitoring machine learning models. The architecture leverages semantic, episodic, procedural, and working memory to generate interpretable reports for model monitoring.
-
+This repository implements KC-Agent (Kahneman-Clear Agent), a novel dual-process cognitive architecture for safe and efficient machine learning model improvement. The architecture leverages insights from cognitive science to balance fast pattern recognition with deliberate analytical reasoning when implementing model improvements.
 
 ## Overview
 
-Monitoring machine learning models in production is critical to ensure their performance and reliability. Traditional methods, like distribution drift detection and feature attribution, often require significant manual effort and technical expertise. This project introduces a novel adaptive cognitive architecture using large language models (LLMs) to improve the interpretation of monitoring outputs, generating actionable insights efficiently.
+Maintaining and improving ML models in production environments is a critical challenge as data distributions evolve over time. Traditional approaches often require extensive manual intervention or risk catastrophic forgetting when implementing improvements. KC-Agent addresses these challenges through a cognitive architecture that integrates dual-process thinking with incremental improvement principles, enabling safer and more efficient model updates.
+
+
+
+The architecture consists of two complementary systems:
+- **Fast Graph (System 1)**: Rapidly identifies and applies pattern-based fixes for common model issues
+- **Slow Graph (System 2)**: Implements careful, deliberate improvements through incremental modifications
+
+This dual-process approach optimizes the trade-off between computational efficiency and improvement quality, with theoretical guarantees for monotonic improvement under specified conditions.
 
 ## Repository Structure
 
-- **generate_dataset.ipynb**: Creates synthetic datasets designed to mimic real-world scenarios for drift distribution problems. It includes healthcare, eligibility, and financial datasets.
-- **benchmark_dataset.ipynb**: Runs all methods to create reports that are tested for each dataset.
-- **results.ipynb**: Contains the final plots and LaTeX tables with the results.
-- **datasets/**: Contains artifacts for each dataset, including reports, prompts, answers, and descriptions.
-- **cama/**: Core library implementing the cognitive architecture, including decision.py, insight.py, memory.py, and other necessary files.
-- **requirements.txt**: Lists the Python dependencies required for this project.
+- **generate_dataset.ipynb**: Creates synthetic datasets designed to simulate distribution drift across financial, healthcare, and eligibility domains
+- **dev4_financial.ipynb**, **dev4_healthcare.ipynb**: Implementation notebooks for running KC-Agent on financial and healthcare domains
+- **results.ipynb**: Visualizes results and generates comparison metrics across different approaches
+- **datasets/**: Contains synthetic datasets with distribution drift scenarios
+- **results/**: Stores experiment results and metrics
+- **paper_figures/**: Contains figures used in the research paper
 
+### Metrics Files
+- **fast_graph_metrics.yaml**, **slow_graph_metrics.yaml**: Performance metrics for Fast and Slow graphs
+- **metrics_baseline.yaml**, **metrics_react.yaml**, etc.: Comparison metrics for baseline approaches
+- **old_metrics.yaml**, **new_metrics.yaml**: Performance on old and new data distributions
 
 ## Usage
 
 1. **Generating Datasets**:
-    - Run `generate_dataset.ipynb` to create the synthetic datasets. This notebook generates features that mimic real-world data scenarios and stores them in the `datasets/` folder. In this case, it generated 3 datasets: healthcare, eligibility, and financial.
+   - Run `generate_dataset.ipynb` to create synthetic datasets simulating distribution drift in different domains
+   - Execute `split_datasets.ipynb` to prepare data for improvement experiments
 
-2. **Benchmarking**:
-    - Execute `benchmark_healthcare.ipynb` to run all methods related to healthcare scenarios and generate reports on testing. This data has features like BMI and Blood Pressure to reflect rising obesity and hypertension rates.
-    - Execute `benchmark_eligibility.ipynb` to run all methods related to eligibility scenarios and generate reports on testing. This data has attributes such as Income and Employment Status to simulate economic growth and changing employment patterns.
-    - Execute `benchmark_financial.ipynb` to run all methods related to financial scenarios and generate reports on testing. This data has features like Credit Score and Loan Amount to reflect inflation, changes in borrowing behavior, and variations in the economic climate.
+2. **Running Experiments**:
+   - For financial domain: Execute `dev4_financial.ipynb`
+   - For healthcare domain: Execute `dev4_healthcare.ipynb`
+   - Each notebook implements the complete KC-Agent architecture with Fast and Slow graphs
 
+3. **Analyzing Results**:
+   - Use `results.ipynb` to visualize performance metrics and generate comparison plots
+   - Key metrics include accuracy on old/new data distributions, execution time, and token usage
 
-3. **Results Analysis**:
-    - Use `results.ipynb` to visualize the results, including plots and LaTeX tables summarizing the final numbers.
+## Cognitive Architecture Components
 
-## Cognitive Architecture
+### Dual-Process Framework
 
-![Cognitive Architecture](imgs/ca.png)
+The core of KC-Agent is its dual-process architecture:
 
-The architecture consists of several components:
+1. **Fast Graph (System 1)**:
+   - Implements pattern-based model retraining using combined old and new data
+   - Evaluates performance improvements through a proxy mechanism
+   - Terminates if sufficient improvement is achieved, otherwise proceeds to System 2
 
-- **Semantic Memory (SM)**: Stores generalized knowledge from training data, models, and tools.
-- **Episodic Memory (EM)**: Retains specific past instances of model monitoring and the insights generated.
-- **Procedural Memory (PM)**: Contains the agent code, including prompts and chains, necessary for LLM utilization.
-- **Working Memory (WM)**: Holds the current context, integrating real-time data with insights from SM and EM.
+2. **Slow Graph (System 2)**:
+   - Performs memory distillation to identify model limitations and potential improvements
+   - Analyzes improvement strategies (model selection, hyperparameter tuning, ensembling)
+   - Implements tiny, verifiable changes with theoretical guarantees
+   - Evaluates changes across both distributions to ensure balanced improvement
 
-### Decision Procedure
+### Memory Components
 
-![Adaptive Fast and Slow Graphs](imgs/dp.png)
+The architecture utilizes three memory types:
+- **Semantic Memory**: Stores dataset descriptions, model architectures, and general knowledge
+- **Episodic Memory**: Records specific improvement attempts and their outcomes
+- **Working Memory**: Maintains current state during the improvement process
 
-1. **Adaptive Fast Graph (S1)**:
-    - Quickly generates insights (e.g., drift scores) using fast tools.
-    - If significant drift is detected, transitions to S2.
+## Theoretical Guarantees
 
-2. **Adaptive Slow Graph (S2)**:
-    - Performs a detailed analysis using slow tools.
-    - Refines data representation, decomposes issues, and compiles insights into comprehensive reports.
+KC-Agent provides theoretical guarantees for monotonic improvement under the following conditions:
+1. Each change satisfies complexity constraints (tiny, verifiable modifications)
+2. The LLM knowledge function is consistent
+3. The evaluation environment remains stationary during improvement
 
-### Flow of the Architecture
+Under these conditions, KC-Agent guarantees that with high probability, the final model's performance will be at least as good as the initial model, plus the sum of all positive improvements, minus a small error term.
 
-1. **Input Data**: The architecture processes input data (`X_test`) to generate initial insights.
-2. **Quick Insight**: Fast tools provide quick insights such as drift scores.
-3. **Proxy Decision**: A threshold-based decision determines if deeper analysis is needed.
-4. **Deep Insight**: Detailed analysis using slow tools leads to comprehensive insights.
-5. **Output**: Generates an interpretable report for human analysis.
+## Benchmarks
+
+The repository includes comprehensive benchmarks comparing KC-Agent against several baselines:
+- Plan and Execute
+- ReAct
+- Reflexion
+- Self-Discovery
+- Tree of Thoughts
+
+Evaluation metrics include:
+- Accuracy on original data distribution
+- Accuracy on new data distribution
+- Execution time
+- Token consumption
+
+Results demonstrate that KC-Agent significantly outperforms baseline methods, achieving superior accuracy on both old and new distributions while consuming fewer computational resources.
 
 ## References
 
-- Paper in revision.
+- Paper submitted to ECML-PKDD 2025.
+- This work is part of a larger research framework for intelligent ML model adaptation.
 
+## Requirements
+
+See `requirements.txt` for a complete list of dependencies. Key packages include:
+- LangGraph
+- PyTorch
+- scikit-learn
+- pandas
+- matplotlib
+- yaml
