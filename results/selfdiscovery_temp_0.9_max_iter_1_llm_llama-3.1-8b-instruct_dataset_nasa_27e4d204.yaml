@@ -1,0 +1,226 @@
+agent_name: self_discovery
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/nasa"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.79
+  new_distribution: 0.372
+improvement_path:
+- iteration: 1
+  code: "dataset_folder = \"datasets/healthcare\"\nfrom sklearn.ensemble import GradientBoostingClassifier,\
+    \ RandomForestClassifier\nimport pandas as pd\nimport numpy as np\nimport yaml\n\
+    from sklearn.preprocessing import StandardScaler\nfrom sklearn.ensemble import\
+    \ GradientBoostingClassifier\nfrom sklearn.metrics import accuracy_score\n\n#\
+    \ Initialize metrics\nmodel_new_score = {\n    'on_old_data': 0.0,\n    'on_new_data':\
+    \ 0.0\n}\n\n# Load data - USE THESE EXACT PATHS\ndataset_folder = \"datasets/financial\"\
+    \nX_train_old = pd.read_csv(f\"{{dataset_folder}}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{{dataset_folder}}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {{dataset_folder}}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {{dataset_folder}}/y_test_old.csv\").squeeze(\"columns\")\n\nX_train_new = pd.read_csv(f\"\
+    {{dataset_folder}}/X_train_new.csv\")\nX_test_new = pd.read_csv(f\"{{dataset_folder}}/X_test_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{{dataset_folder}}/y_train_new.csv\").squeeze(\"\
+    columns\")\ny_test_new = pd.read_csv(f\"{{dataset_folder}}/y_test_new.csv\").squeeze(\"\
+    columns\")\n\n# Preprocess data\nnumerical_features = X_train_old.select_dtypes(include=['int64',\
+    \ 'float64']).columns\ncategorical_features = X_train_old.select_dtypes(include=['object']).columns\n\
+    \npreprocessor = make_column_transformer(\n    (StandardScaler(), numerical_features),\n\
+    \    (pd.CategoricalEncoder(), categorical_features)\n)\n\nX_train_combined =\
+    \ pd.concat([X_train_old, X_train_new])\ny_train_combined = pd.concat([y_train_old,\
+    \ y_train_new])\n\n# Combine datasets\nX_train_combined = preprocessor.fit_transform(X_train_combined)\n\
+    X_test_old = preprocessor.transform(X_test_old)\nX_test_new = preprocessor.transform(X_test_new)\n\
+    \n# Train model\nmodel = GradientBoostingClassifier(random_state=42, max_depth=5,\
+    \ n_estimators=100)\nmodel.fit(X_train_combined, y_train_combined)\n\n# Evaluate\
+    \ on old distribution\nold_score = accuracy_score(y_test_old, model.predict(X_test_old))\n\
+    print(f'Model evaluated on old distribution: {old_score}')\nmodel_new_score['on_old_data']\
+    \ = float(old_score)\n\n# Evaluate on new distribution\nnew_score = accuracy_score(y_test_new,\
+    \ model.predict(X_test_new))\nprint(f'Model evaluated on new distribution: {new_score}')\n\
+    model_new_score['on_new_data'] = float(new_score)\n\n# Save metrics\nwith open('metrics_self_discovery.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  metrics:
+    old_distribution: 0.79
+    new_distribution: 0.372
+  changes:
+  - USE THESE EXACT PATHS
+  reflection: "Selected Modules:\n1. How could I simplify the problem so that it is\
+    \ easier to solve?\n2. What are the key techniques for improving an ML model on\
+    \ distribution shifts?\n3. How can I implement a robust solution that works with\
+    \ the given datasets?\n\nAdapted Plan:\n**Adapted Solution**\n\n### Problem Simplification\n\
+    \nTo simplify the problem, we will focus on the following:\n\n*   Convert the\
+    \ categorical feature `Bleed_enthalpy` into numerical values using the `LabelEncoder`\
+    \ from scikit-learn.\n*   Remove any missing values in the dataset.\n\n### Key\
+    \ Techniques for Distribution Shifts\n\nTo address distribution shifts, we will\
+    \ use the following techniques:\n\n*   **Data Preprocessing**: Normalize the numerical\
+    \ features to have zero mean and unit variance.\n*   **Model selection**: Choose\
+    \ between `RandomForest` and `GradientBoosting` based on performance on the validation\
+    \ set.\n*   **Robust Evaluation Metrics**: Use metrics that are less sensitive\
+    \ to outliers, such as Mean Squared Error (MSE) and Mean Absolute Error (MAE).\n\
+    \n### Robust Solution\n\n#### Data Preprocessing\n\n*   **Numerical Features**:\n\
+    \    *   Normalize using `StandardScaler` from scikit-learn to have zero mean\
+    \ and unit variance.\n*   **Categorical Feature**:\n    *   Convert `Bleed_enthalpy`\
+    \ to numerical values using `LabelEncoder`.\n\n#### Model Selection\n\n*   **Model**:\
+    \ Choose between `RandomForest` and `GradientBoosting` based on performance on\
+    \ the validation set.\n*   **Hyperparameter Tuning**: Use GridSearchCV with both\
+    \ models to tune hyperparameters.\n\n#### Combining Old and New Data\n\n*   **Ensemble\
+    \ Methods**: Use stacking to combine predictions from both models on the old and\
+    \ new data.\n\n#### Evaluation Metrics\n\n*   **Metrics**: Use MSE and MAE as\
+    \ evaluation metrics.\n\n## Code Example\n\nHere's an example code snippet using\
+    \ the above techniques:\n\n```python\nfrom sklearn.model_selection import train_test_split\n\
+    from sklearn.preprocessing import StandardScaler, LabelEncoder\nfrom sklearn.ensemble\
+    \ import RandomForestClassifier, GradientBoostingClassifier\nfrom sklearn.metrics\
+    \ import mean_squared_error, mean_absolute_error\nfrom sklearn.model_selection\
+    \ import GridSearchCV\nfrom sklearn.compose import make_column_transformer\nfrom\
+    \ sklearn.pipeline import make_pipeline\n\n# Load and preprocess data\ndf = pd.read_csv('datasets/healthcare.csv')\n\
+    \n# Convert categorical feature to numerical\nle = LabelEncoder()\ndf['Bleed_enthalpy']\
+    \ = le.fit_transform(df['Bleed_enthalpy'])\n\n# Remove missing values\ndf = df.dropna()\n\
+    \n# Split data into features and target\nX = df.drop('target', axis=1)\ny = df['target']\n\
+    \n# Split data into train and test sets\nX_train, X_test, y_train, y_test = train_test_split(X,\
+    \ y, test_size=0.2, random_state=42)\n\n# Define preprocessing pipeline\nnumerical_features\
+    \ = X_train.select_dtypes(include=['int64', 'float64']).columns\ncategorical_features\
+    \ = X_train.select_dtypes(include=['object']).columns\n\npreprocessor = make_column_transformer(\n\
+    \    (StandardScaler(), numerical_features),\n    (LabelEncoder(), categorical_features)\n\
+    )\n\n# Define models and hyperparameter search space\nmodels = {\n    'RandomForest':\
+    \ RandomForestClassifier(),\n    'GradientBoosting': GradientBoostingClassifier()\n\
+    }\n\nparam_grid = {\n    'RandomForest': {\n        'n_estimators': [100, 200,\
+    \ 300],\n        'max_depth': [5, 10, 15]\n    },\n    'GradientBoosting': {\n\
+    \        'max_depth': [3, 5, 7],\n        'n_estimators': [100, 200, 300]\n  \
+    \  }\n}\n\n# Perform hyperparameter tuning and model selection\nbest_model = None\n\
+    best_score = 0\nfor name, model in models.items():\n    grid_search = GridSearchCV(model,\
+    \ param_grid[name], cv=5, scoring='neg_mean_squared_error')\n    grid_search.fit(preprocessor.fit_transform(X_train),\
+    \ y_train)\n    score = grid_search.best_score_\n    if score > best_score:\n\
+    \        best_model = (name, grid_search.best_estimator_)\n        best_score\
+    \ = score\nprint(f'Best model: {best_model[0]} with score: {best_score}')\n\n\
+    # Train the best model on the whole dataset\nbest_model[1].fit(preprocessor.fit_transform(X),\
+    \ y)\n\n# Evaluate the best model on the test set\ny_pred = best_model[1].predict(preprocessor.fit_transform(X_test))\n\
+    mse = mean_squared_error(y_test, y_pred)\nmae = mean_absolute_error(y_test, y_pred)\n\
+    print(f'MSE: {mse}, MAE: {mae}')\n```\n\nThis code demonstrates how to simplify\
+    \ the problem by preprocessing the data, select the best model, and evaluate the\
+    \ model using robust metrics.\n\nStructure:\nHere is a practical implementation\
+    \ plan based on the adapted modules:\n\n**1. Data Loading and Preparation**\n\n\
+    *   Load the healthcare dataset for both old and new data using `pd.read_csv()`.\n\
+    *   Remove missing values using `df.dropna()` and remove any duplicate rows using\
+    \ `df.drop_duplicates()`.\n*   Split the data into features (`X`) and target variable\
+    \ (`y`).\n*   Convert the categorical feature `Bleed_enthalpy` into numerical\
+    \ values using `LabelEncoder`.\n\n**2. Baseline Model Implementation**\n\n*  \
+    \ Use a simple model such as `RandomForestClassifier` as a baseline.\n*   Implement\
+    \ model selection using `GridSearchCV` to tune hyperparameters.\n*   Use metrics\
+    \ such as Mean Squared Error (MSE) and Mean Absolute Error (MAE) for evaluation.\n\
+    *   Use a simple model choice based on the performance on the validation set.\n\
+    \n**3. Improved Model Implementation**\n\n*   Implement the improved model using\
+    \ ensemble methods and stacking to combine predictions from both models on the\
+    \ old and new data.\n*   Use preprocessing techniques such as normalization and\
+    \ encoding for categorical variables.\n*   Hyperparameter tuning using GridSearchCV\
+    \ with both models to tune hyperparameters.\n*   Use both `RandomForestClassifier`\
+    \ and `GradientBoostingClassifier` and compare their performance.\n*   Choose\
+    \ the best model based on the performance on the validation set.\n\n**4. Evaluation\
+    \ and Metrics**\n\n*   Evaluate the performance of both models using metrics such\
+    \ as MSE and MAE.\n*   Compare the performance of both models and choose the best\
+    \ model.\n*   Save the metrics in the correct format.\n\n**Code Implementation**\n\
+    \n```python\nimport pandas as pd\nfrom sklearn.model_selection import train_test_split\n\
+    from sklearn.preprocessing import StandardScaler, LabelEncoder\nfrom sklearn.ensemble\
+    \ import RandomForestClassifier, GradientBoostingClassifier\nfrom sklearn.metrics\
+    \ import mean_squared_error, mean_absolute_error\nfrom sklearn.model_selection\
+    \ import GridSearchCV\nfrom sklearn.compose import make_column_transformer\nfrom\
+    \ sklearn.pipeline import make_pipeline\n\n# Load and preprocess data\ndf_old\
+    \ = pd.read_csv('old_data.csv')\ndf_new = pd.read_csv('new_data.csv')\n\n# Remove\
+    \ missing values\ndf_old = df_old.dropna()\ndf_new = df_new.dropna()\n\n# Convert\
+    \ categorical feature to numerical\nle = LabelEncoder()\ndf_old['Bleed_enthalpy']\
+    \ = le.fit_transform(df_old['Bleed_enthalpy'])\ndf_new['Bleed_enthalpy'] = le.fit_transform(df_new['Bleed_enthalpy'])\n\
+    \n# Split data into features and target\nX_old = df_old.drop('target', axis=1)\n\
+    y_old = df_old['target']\nX_new = df_new.drop('target', axis=1)\ny_new = df_new['target']\n\
+    \n# Split data into train and test sets\nX_train_old, X_test_old, y_train_old,\
+    \ y_test_old = train_test_split(X_old, y_old, test_size=0.2, random_state=42)\n\
+    X_train_new, X_test_new, y_train_new, y_test_new = train_test_split(X_new, y_new,\
+    \ test_size=0.2, random_state=42)\n\n# Define preprocessing pipeline\nnumerical_features\
+    \ = X_train_old.select_dtypes(include=['int64', 'float64']).columns\ncategorical_features\
+    \ = X_train_old.select_dtypes(include=['object']).columns\n\npreprocessor = make_column_transformer(\n\
+    \    (StandardScaler(), numerical_features),\n    (LabelEncoder(), categorical_features)\n\
+    )\n\n# Define models and hyperparameter search space\nmodels = {\n    'RandomForest':\
+    \ RandomForestClassifier(),\n    'GradientBoosting': GradientBoostingClassifier()\n\
+    }\n\nparam_grid = {\n    'RandomForest': {\n        'n_estimators': [100, 200,\
+    \ 300],\n        'max_depth': [5, 10, 15]\n    },\n    'GradientBoosting': {\n\
+    \        'max_depth': [3, 5, 7],\n        'n_estimators': [100, 200, 300]\n  \
+    \  }\n}\n\n# Perform hyperparameter tuning and model selection\nbest_model = None\n\
+    best_score = 0\nfor name, model in models.items():\n    grid_search = GridSearchCV(model,\
+    \ param_grid[name], cv=5, scoring='neg_mean_squared_error')\n    grid_search.fit(preprocessor.fit_transform(X_train_old),\
+    \ y_train_old)\n    score = grid_search.best_score_\n    if score > best_score:\n\
+    \        best_model = (name, grid_search.best_estimator_)\n        best_score\
+    \ = score\nprint(f'Best model: {best_model[0]} with score: {best_score}')\n\n\
+    # Train the best model on the whole dataset\nbest_model[1].fit(preprocessor.fit_transform(X_old),\
+    \ y_old)\n\n# Evaluate the best model on the test set\ny_pred = best_model[1].predict(preprocessor.fit_transform(X_test_old))\n\
+    mse = mean_squared_error(y_test_old, y_pred)\nmae = mean_absolute_error(y_test_old,\
+    \ y_pred)\nprint(f'MSE: {mse}, MAE: {mae}')\n```\n\nThis code demonstrates how\
+    \ to load and preprocess the data, implement a baseline model, implement an improved\
+    \ model using ensemble methods and stacking, evaluate and compare both models,\
+    \ and save the metrics in the correct format."
+  execution_time: 0
+final_code: "dataset_folder = \"datasets/healthcare\"\nfrom sklearn.ensemble import\
+  \ GradientBoostingClassifier, RandomForestClassifier\nimport pandas as pd\nimport\
+  \ numpy as np\nimport yaml\nfrom sklearn.preprocessing import StandardScaler\nfrom\
+  \ sklearn.ensemble import GradientBoostingClassifier\nfrom sklearn.metrics import\
+  \ accuracy_score\n\n# Initialize metrics\nmodel_new_score = {\n    'on_old_data':\
+  \ 0.0,\n    'on_new_data': 0.0\n}\n\n# Load data - USE THESE EXACT PATHS\ndataset_folder\
+  \ = \"datasets/financial\"\nX_train_old = pd.read_csv(f\"{{dataset_folder}}/X_train_old.csv\"\
+  )\nX_test_old = pd.read_csv(f\"{{dataset_folder}}/X_test_old.csv\")\ny_train_old\
+  \ = pd.read_csv(f\"{{dataset_folder}}/y_train_old.csv\").squeeze(\"columns\")\n\
+  y_test_old = pd.read_csv(f\"{{dataset_folder}}/y_test_old.csv\").squeeze(\"columns\"\
+  )\n\nX_train_new = pd.read_csv(f\"{{dataset_folder}}/X_train_new.csv\")\nX_test_new\
+  \ = pd.read_csv(f\"{{dataset_folder}}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"\
+  {{dataset_folder}}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"\
+  {{dataset_folder}}/y_test_new.csv\").squeeze(\"columns\")\n\n# Preprocess data\n\
+  numerical_features = X_train_old.select_dtypes(include=['int64', 'float64']).columns\n\
+  categorical_features = X_train_old.select_dtypes(include=['object']).columns\n\n\
+  preprocessor = make_column_transformer(\n    (StandardScaler(), numerical_features),\n\
+  \    (pd.CategoricalEncoder(), categorical_features)\n)\n\nX_train_combined = pd.concat([X_train_old,\
+  \ X_train_new])\ny_train_combined = pd.concat([y_train_old, y_train_new])\n\n# Combine\
+  \ datasets\nX_train_combined = preprocessor.fit_transform(X_train_combined)\nX_test_old\
+  \ = preprocessor.transform(X_test_old)\nX_test_new = preprocessor.transform(X_test_new)\n\
+  \n# Train model\nmodel = GradientBoostingClassifier(random_state=42, max_depth=5,\
+  \ n_estimators=100)\nmodel.fit(X_train_combined, y_train_combined)\n\n# Evaluate\
+  \ on old distribution\nold_score = accuracy_score(y_test_old, model.predict(X_test_old))\n\
+  print(f'Model evaluated on old distribution: {old_score}')\nmodel_new_score['on_old_data']\
+  \ = float(old_score)\n\n# Evaluate on new distribution\nnew_score = accuracy_score(y_test_new,\
+  \ model.predict(X_test_new))\nprint(f'Model evaluated on new distribution: {new_score}')\n\
+  model_new_score['on_new_data'] = float(new_score)\n\n# Save metrics\nwith open('metrics_self_discovery.yaml',\
+  \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+final_metrics:
+  old_distribution: 0.79
+  new_distribution: 0.372
+runtime_statistics:
+  total_time_seconds: 33.841471910476685
+  iterations: 1
+  tokens_used: 5150
+  prompt_tokens: 2401
+  completion_tokens: 2749
+  iteration_times: []
+  evaluation_timestamp: '2025-07-19T00:50:07.058840Z'

@@ -1,0 +1,147 @@
+agent_name: baseline
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/nasa"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.79
+  new_distribution: 0.372
+improvement_path:
+- iteration: 1
+  code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    from sklearn.metrics import accuracy_score\nfrom sklearn.preprocessing import\
+    \ StandardScaler\n\n# Initialize metrics dictionary\nmodel_new_score = {\n   \
+    \ 'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load data from specified\
+    \ folder\ndataset_folder = \"datasets/nasa\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+    )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n\
+    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+    )\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Combine training data\nX_train = pd.concat([X_train_old, X_train_new])\ny_train\
+    \ = pd.concat([y_train_old, y_train_new])\n\n# Scaling is crucial for maintaining\
+    \ the weights\nscaler = StandardScaler()\nX_train[['LPC_outlet_temperature', 'HPC_outlet_temperature',\
+    \ 'LPT_outlet_temperature',\n         'Bypass_duct_pressure', 'HPC_outlet_pressure',\
+    \ 'Physical_fan_speed',\n         'Physical_core_speed', 'HPC_outlet_static_pressure',\
+    \ 'Fuel_flow_ratio',\n         'Corrected_fan_speed', 'Bypass_ratio', 'HPT_cool_air_flow',\
+    \ 'LPT_cool_air_flow']] = scaler.fit_transform(\n    X_train[['LPC_outlet_temperature',\
+    \ 'HPC_outlet_temperature', 'LPT_outlet_temperature',\n             'Bypass_duct_pressure',\
+    \ 'HPC_outlet_pressure', 'Physical_fan_speed',\n             'Physical_core_speed',\
+    \ 'HPC_outlet_static_pressure', 'Fuel_flow_ratio',\n             'Corrected_fan_speed',\
+    \ 'Bypass_ratio', 'HPT_cool_air_flow', 'LPT_cool_air_flow']])\nX_test = pd.concat([X_test_old,\
+    \ X_test_new])\nX_test[['LPC_outlet_temperature', 'HPC_outlet_temperature', 'LPT_outlet_temperature',\n\
+    \        'Bypass_duct_pressure', 'HPC_outlet_pressure', 'Physical_fan_speed',\n\
+    \        'Physical_core_speed', 'HPC_outlet_static_pressure', 'Fuel_flow_ratio',\n\
+    \        'Corrected_fan_speed', 'Bypass_ratio', 'HPT_cool_air_flow', 'LPT_cool_air_flow']]\
+    \ = scaler.transform(\n    X_test[['LPC_outlet_temperature', 'HPC_outlet_temperature',\
+    \ 'LPT_outlet_temperature',\n            'Bypass_duct_pressure', 'HPC_outlet_pressure',\
+    \ 'Physical_fan_speed',\n            'Physical_core_speed', 'HPC_outlet_static_pressure',\
+    \ 'Fuel_flow_ratio',\n            'Corrected_fan_speed', 'Bypass_ratio', 'HPT_cool_air_flow',\
+    \ 'LPT_cool_air_flow']])\n\n# Use Random Forest Classifier with more trees to\
+    \ handle multiple features and categories\nmodel_new = RandomForestClassifier(\n\
+    \    random_state=42,\n    n_estimators=500,\n    n_jobs=-1\n)\n\nmodel_new.fit(X_train,\
+    \ y_train)\n\n# Evaluate new model on old test set\nnew_score_old = accuracy_score(y_test_old,\
+    \ model_new.predict(X_test_old))\nprint(f'New model trained and evaluated on old\
+    \ distribution: {new_score_old}')\nmodel_new_score['on_old_data'] = float(new_score_old)\n\
+    \n# Evaluate new model on new test set\nnew_score_new = accuracy_score(y_test_new,\
+    \ model_new.predict(X_test_new))\nprint(f'New model evaluated on new distribution:\
+    \ {new_score_new}')\nmodel_new_score['on_new_data'] = float(new_score_new)\n\n\
+    # Save metrics\nwith open('metrics_baseline.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)\n"
+  metrics:
+    old_distribution: 0.258
+    new_distribution: 0.48
+  changes:
+  - Scaled numerical features with StandardScaler to stabilize model behavior
+  - Increased n_estimators to 500 to better handle the diverse dataset
+  reflection: 'Iteration 1 changes: Scaled numerical features with StandardScaler
+    to stabilize model behavior; Increased n_estimators to 500 to better handle the
+    diverse dataset'
+  execution_time: 18.35867667198181
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+  from sklearn.metrics import accuracy_score\nfrom sklearn.preprocessing import StandardScaler\n\
+  \n# Initialize metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+  \    'on_old_data': 0.0\n}\n\n# Load data from specified folder\ndataset_folder\
+  \ = \"datasets/nasa\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+  )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old =\
+  \ pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old\
+  \ = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n#\
+  \ Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\"\
+  )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new =\
+  \ pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Combine\
+  \ training data\nX_train = pd.concat([X_train_old, X_train_new])\ny_train = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# Scaling is crucial for maintaining the weights\nscaler = StandardScaler()\n\
+  X_train[['LPC_outlet_temperature', 'HPC_outlet_temperature', 'LPT_outlet_temperature',\n\
+  \         'Bypass_duct_pressure', 'HPC_outlet_pressure', 'Physical_fan_speed',\n\
+  \         'Physical_core_speed', 'HPC_outlet_static_pressure', 'Fuel_flow_ratio',\n\
+  \         'Corrected_fan_speed', 'Bypass_ratio', 'HPT_cool_air_flow', 'LPT_cool_air_flow']]\
+  \ = scaler.fit_transform(\n    X_train[['LPC_outlet_temperature', 'HPC_outlet_temperature',\
+  \ 'LPT_outlet_temperature',\n             'Bypass_duct_pressure', 'HPC_outlet_pressure',\
+  \ 'Physical_fan_speed',\n             'Physical_core_speed', 'HPC_outlet_static_pressure',\
+  \ 'Fuel_flow_ratio',\n             'Corrected_fan_speed', 'Bypass_ratio', 'HPT_cool_air_flow',\
+  \ 'LPT_cool_air_flow']])\nX_test = pd.concat([X_test_old, X_test_new])\nX_test[['LPC_outlet_temperature',\
+  \ 'HPC_outlet_temperature', 'LPT_outlet_temperature',\n        'Bypass_duct_pressure',\
+  \ 'HPC_outlet_pressure', 'Physical_fan_speed',\n        'Physical_core_speed', 'HPC_outlet_static_pressure',\
+  \ 'Fuel_flow_ratio',\n        'Corrected_fan_speed', 'Bypass_ratio', 'HPT_cool_air_flow',\
+  \ 'LPT_cool_air_flow']] = scaler.transform(\n    X_test[['LPC_outlet_temperature',\
+  \ 'HPC_outlet_temperature', 'LPT_outlet_temperature',\n            'Bypass_duct_pressure',\
+  \ 'HPC_outlet_pressure', 'Physical_fan_speed',\n            'Physical_core_speed',\
+  \ 'HPC_outlet_static_pressure', 'Fuel_flow_ratio',\n            'Corrected_fan_speed',\
+  \ 'Bypass_ratio', 'HPT_cool_air_flow', 'LPT_cool_air_flow']])\n\n# Use Random Forest\
+  \ Classifier with more trees to handle multiple features and categories\nmodel_new\
+  \ = RandomForestClassifier(\n    random_state=42,\n    n_estimators=500,\n    n_jobs=-1\n\
+  )\n\nmodel_new.fit(X_train, y_train)\n\n# Evaluate new model on old test set\nnew_score_old\
+  \ = accuracy_score(y_test_old, model_new.predict(X_test_old))\nprint(f'New model\
+  \ trained and evaluated on old distribution: {new_score_old}')\nmodel_new_score['on_old_data']\
+  \ = float(new_score_old)\n\n# Evaluate new model on new test set\nnew_score_new\
+  \ = accuracy_score(y_test_new, model_new.predict(X_test_new))\nprint(f'New model\
+  \ evaluated on new distribution: {new_score_new}')\nmodel_new_score['on_new_data']\
+  \ = float(new_score_new)\n\n# Save metrics\nwith open('metrics_baseline.yaml', 'w')\
+  \ as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+final_metrics:
+  old_distribution: 0.258
+  new_distribution: 0.48
+runtime_statistics:
+  total_time_seconds: 18.40481972694397
+  iterations: 1
+  tokens_used: 1599
+  prompt_tokens: 640
+  completion_tokens: 959
+  iteration_times:
+  - iteration: 1
+    time: 18.35867667198181
+  evaluation_timestamp: '2025-07-18T23:53:38.984984Z'

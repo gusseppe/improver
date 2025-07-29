@@ -100,6 +100,7 @@ class FastGraph:
                 
                 # Use the enhanced prompt
                 prompt = prompt_generate_retraining_code_with_insights()
+                state['generations_fast_graph']['has_slow_graph_insights'] = True
             else:
                 print("No slow graph insights available, using basic retraining approach")
                 # Prepare basic YAML content
@@ -107,6 +108,7 @@ class FastGraph:
                 
                 # Use the standard prompt
                 prompt = prompt_generate_retraining_code()
+                state['generations_fast_graph']['has_slow_graph_insights'] = False
             
             # Invoke the LLM
             chain = prompt | self.llm
@@ -173,7 +175,7 @@ class FastGraph:
         wrapped_code = f"```python\n{current_code}\n```"
         
         executor = LocalCommandLineCodeExecutor(
-            timeout=10,
+            timeout=100,
             work_dir=".",
         )
         code_executor_agent = ConversableAgent(
@@ -202,17 +204,38 @@ class FastGraph:
                     new_model_score = new_metrics['model_new_score']
                     state['generations_fast_graph'].update(new_metrics)
                 
+                # When using slow graph insights, we need to compare against the right baseline
+                # Use slow graph metrics as baseline if available and better than old model
+                baseline_old_score = old_model_score
+                if (state['generations_fast_graph'].get('has_slow_graph_insights', False) and 
+                    'generations_slow_graph' in state and 
+                    'yaml_output' in state['generations_slow_graph']):
+                    slow_graph_metrics = state['generations_slow_graph']['yaml_output']['final_metrics']
+                    slow_graph_baseline = {
+                        'on_old_data': slow_graph_metrics.get('old_distribution', 0),
+                        'on_new_data': slow_graph_metrics.get('new_distribution', 0)
+                    }
+                    
+                    # Compare slow graph vs original baseline and use the better one
+                    if (slow_graph_baseline.get('on_new_data', 0) >= baseline_old_score.get('on_new_data', 0) and
+                        slow_graph_baseline.get('on_old_data', 0) >= baseline_old_score.get('on_old_data', 0)):
+                        baseline_old_score = slow_graph_baseline
+                        print("Using Slow Graph metrics as baseline for comparison")
+                    else:
+                        print("Using original old model metrics as baseline")
+                
                 # Create improvement entry
                 improvement_entry = create_improvement_entry(
                     previous_code=state['semantic_memory'].model_code,
                     new_code=current_code,
                     graph_type='fast',
                     strategy_type=None,
-                    old_model_score=old_model_score,
+                    old_model_score=baseline_old_score,
                     new_model_score=new_model_score,
                     changes_made={
                         'retrained_on_combined_data': True,
-                        'iteration_count': state['generations_fast_graph'].get('iteration_count', 0)
+                        'iteration_count': state['generations_fast_graph'].get('iteration_count', 0),
+                        'used_slow_graph_insights': state['generations_fast_graph'].get('has_slow_graph_insights', False)
                     }
                 )
                 
@@ -416,8 +439,9 @@ class FastGraph:
             }]
             
         # Build the standardized output
-        return {
-            "agent_name": "fast",
+        agent_name = "improver" if state['generations_fast_graph']['has_slow_graph_insights'] else "fast"
+        output = {
+            "agent_name": agent_name,
             "initial_code": initial_code,
             "initial_metrics": initial_metrics,
             "improvement_path": improvement_path,
@@ -430,6 +454,54 @@ class FastGraph:
                 "evaluation_timestamp": datetime.utcnow().isoformat() + "Z"
             }
         }
+        
+        # When using slow graph insights, compare final metrics with both fast graph and slow graph baselines
+        if state['generations_fast_graph'].get('has_slow_graph_insights', False):
+            # Get potential baseline metrics to compare against
+            baselines = []
+            
+            # Add fast graph metrics as baseline (current initial_metrics)
+            if initial_metrics:
+                baselines.append({
+                    'name': 'Fast Graph',
+                    'metrics': initial_metrics,
+                    'code': initial_code
+                })
+            
+            # Add slow graph metrics as baseline if available
+            if ('generations_slow_graph' in state and 
+                'yaml_output' in state['generations_slow_graph'] and 
+                'final_metrics' in state['generations_slow_graph']['yaml_output']):
+                slow_graph_metrics = state['generations_slow_graph']['yaml_output']['final_metrics']
+                slow_graph_code = state['generations_slow_graph']['yaml_output']['final_code']
+                baselines.append({
+                    'name': 'Slow Graph',
+                    'metrics': slow_graph_metrics,
+                    'code': slow_graph_code
+                })
+            
+            # Find the best baseline and current result
+            current_total = final_metrics.get("old_distribution", 0) + final_metrics.get("new_distribution", 0)
+            best_baseline = None
+            best_total = current_total
+            
+            for baseline in baselines:
+                baseline_total = baseline['metrics'].get("old_distribution", 0) + baseline['metrics'].get("new_distribution", 0)
+                if baseline_total > best_total:
+                    best_baseline = baseline
+                    best_total = baseline_total
+            
+            # Revert to best baseline if it's better than current result
+            if best_baseline:
+                print(f"Reverting to {best_baseline['name']} metrics: {best_baseline['name']} total={best_total:.4f} > Current total={current_total:.4f}")
+                output["final_metrics"] = best_baseline['metrics']
+                output["final_code"] = best_baseline['code']
+                output["reverted_to_baseline"] = best_baseline['name']
+            else:
+                print(f"Keeping current Fast Graph results: Current total={current_total:.4f} >= Best baseline total={best_total:.4f}")
+                output["reverted_to_baseline"] = None
+        
+        return output
     
     def run(self, initial_state: WorkingMemory):
         """Run the fast graph improvement process with enhanced logging and standardized output"""

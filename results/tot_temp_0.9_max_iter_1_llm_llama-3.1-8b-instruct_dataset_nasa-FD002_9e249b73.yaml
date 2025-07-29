@@ -1,0 +1,104 @@
+agent_name: tot
+initial_code: ''
+initial_metrics: {}
+improvement_path:
+- iteration: 1
+  code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier,\
+    \ VotingClassifier\nfrom sklearn.model_selection import train_test_split\nfrom\
+    \ sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionary\nmodel_new_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load data from\
+    \ specified folder\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old = pd.read_csv(f\"\
+    {dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\"\
+    )\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"\
+    columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"\
+    columns\")\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Combine old and new data\nX_train = pd.concat([X_train_old, X_train_new])\n\
+    y_train = pd.concat([y_train_old, y_train_new])\n\n# Split data into training\
+    \ and validation sets\nX_train_val, X_val, y_train_val, y_val = train_test_split(X_train,\
+    \ y_train, test_size=0.2, random_state=42)\n\n# Define baseline model\nmodel1\
+    \ = RandomForestClassifier(n_estimators=100, random_state=42)\n\n# Define ensemble\
+    \ model\nensemble = VotingClassifier(estimators=[('rf', model1)], voting='soft')\n\
+    \n# Train baseline model\nmodel1.fit(X_train_val, y_train_val)\n\n# Train ensemble\
+    \ model\nensemble.fit(X_train_val, y_train_val)\n\n# Evaluate baseline model on\
+    \ old distribution\nold_accuracy = accuracy_score(y_test_old, model1.predict(X_test_old))\n\
+    print(f'Baseline model evaluated on the old distribution: {old_accuracy}')\nmodel_new_score['on_old_data']\
+    \ = float(old_accuracy)\n\n# Evaluate ensemble model on old distribution\nensemble_accuracy\
+    \ = accuracy_score(y_test_old, ensemble.predict(X_test_old))\nprint(f'Ensemble\
+    \ model evaluated on the old distribution: {ensemble_accuracy}')\n\n# Evaluate\
+    \ both models on new distribution\nnew_accuracy_model1 = accuracy_score(y_test_new,\
+    \ model1.predict(X_test_new))\nnew_accuracy_ensemble = accuracy_score(y_test_new,\
+    \ ensemble.predict(X_test_new))\nprint(f'Baseline model evaluated on new distribution:\
+    \ {new_accuracy_model1}')\nprint(f'Ensemble model evaluated on new distribution:\
+    \ {new_accuracy_ensemble}')\n\n# Save metrics\nmodel_new_score['on_new_data']\
+    \ = float(new_accuracy_ensemble)\n\nwith open('metrics_tot.yaml', 'w') as f:\n\
+    \    yaml.dump({'model_new_score': model_new_score}, f)\n\n# Print final metrics\n\
+    print(f'Final model evaluation metrics on new data: {model_new_score}')\n"
+  metrics:
+    old_distribution: 0.6825
+    new_distribution: 0.51
+  changes:
+  - Used VotingClassifier for ensemble model
+  - Added train_test_split for proper data splitting
+  - Defined baseline model and ensemble model
+  - Evaluated both models on old and new distributions
+  - Picked ensemble accuracy as final model evaluation
+  reflection: 'Old distribution: 0.6825 (was 0.7212)
+
+    New distribution: 0.5100 (was 0.2650)
+
+    Weighted score: 0.5617
+
+    Improvement: 39.78%'
+  execution_time: 0
+  score: 0.8978227060653188
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier,\
+  \ VotingClassifier\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.metrics\
+  \ import accuracy_score\n\n# Initialize metrics dictionary\nmodel_new_score = {\n\
+  \    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load data from specified\
+  \ folder\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old = pd.read_csv(f\"\
+  {dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\"\
+  )\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\"\
+  )\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+  )\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\"\
+  )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new =\
+  \ pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Combine\
+  \ old and new data\nX_train = pd.concat([X_train_old, X_train_new])\ny_train = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# Split data into training and validation sets\nX_train_val,\
+  \ X_val, y_train_val, y_val = train_test_split(X_train, y_train, test_size=0.2,\
+  \ random_state=42)\n\n# Define baseline model\nmodel1 = RandomForestClassifier(n_estimators=100,\
+  \ random_state=42)\n\n# Define ensemble model\nensemble = VotingClassifier(estimators=[('rf',\
+  \ model1)], voting='soft')\n\n# Train baseline model\nmodel1.fit(X_train_val, y_train_val)\n\
+  \n# Train ensemble model\nensemble.fit(X_train_val, y_train_val)\n\n# Evaluate baseline\
+  \ model on old distribution\nold_accuracy = accuracy_score(y_test_old, model1.predict(X_test_old))\n\
+  print(f'Baseline model evaluated on the old distribution: {old_accuracy}')\nmodel_new_score['on_old_data']\
+  \ = float(old_accuracy)\n\n# Evaluate ensemble model on old distribution\nensemble_accuracy\
+  \ = accuracy_score(y_test_old, ensemble.predict(X_test_old))\nprint(f'Ensemble model\
+  \ evaluated on the old distribution: {ensemble_accuracy}')\n\n# Evaluate both models\
+  \ on new distribution\nnew_accuracy_model1 = accuracy_score(y_test_new, model1.predict(X_test_new))\n\
+  new_accuracy_ensemble = accuracy_score(y_test_new, ensemble.predict(X_test_new))\n\
+  print(f'Baseline model evaluated on new distribution: {new_accuracy_model1}')\n\
+  print(f'Ensemble model evaluated on new distribution: {new_accuracy_ensemble}')\n\
+  \n# Save metrics\nmodel_new_score['on_new_data'] = float(new_accuracy_ensemble)\n\
+  \nwith open('metrics_tot.yaml', 'w') as f:\n    yaml.dump({'model_new_score': model_new_score},\
+  \ f)\n\n# Print final metrics\nprint(f'Final model evaluation metrics on new data:\
+  \ {model_new_score}')\n"
+final_metrics:
+  old_distribution: 0.6825
+  new_distribution: 0.51
+runtime_statistics:
+  total_time_seconds: 13.31844449043274
+  iterations: 1
+  tokens_used: 2684
+  prompt_tokens: 527
+  completion_tokens: 2157
+  beam_width: 3
+  num_candidates: 3
+  iteration_times: []
+  evaluation_timestamp: '2025-07-19T03:03:56.019955Z'
+  execution_attempts: 1
+  successful_executions: 1
+  failed_executions: 0

@@ -1,0 +1,42 @@
+{
+  "NUM_SAMPLES": 16000,
+  "FEATURES": [
+    "Setting_1",
+    "Setting_2",
+    "Setting_3",
+    "LPC_outlet_temperature",
+    "Physical_fan_speed",
+    "Corrected_core_speed",
+    "Burner_fuel_air_ratio"
+  ],
+  "NUMERICAL_FEATURES": [
+    "Setting_1",
+    "Setting_2",
+    "Setting_3",
+    "LPC_outlet_temperature",
+    "Physical_fan_speed",
+    "Corrected_core_speed",
+    "Burner_fuel_air_ratio"
+  ],
+  "CATEGORICAL_FEATURES": [],
+  "LABEL": "Maintenance_Status",
+  "COLUMN_TYPES": {
+    "Setting_1": "float",
+    "Setting_2": "float",
+    "Setting_3": "float",
+    "LPC_outlet_temperature": "float",
+    "Physical_fan_speed": "float",
+    "Corrected_core_speed": "float",
+    "Burner_fuel_air_ratio": "float",
+    "Maintenance_Status": "int"
+  },
+  "DATASET_TITLE": "NASA Turbofan FD002 Maintenance Windows Classification Dataset",
+  "DATASET_DESCRIPTION": "NASA turbofan FD002 dataset (6 operating conditions, 260 engines) converted to maintenance windows classification: 0=No_Maintenance, 1=Routine_Maintenance, 2=Priority_Maintenance, 3=Immediate_Maintenance.",
+  "LABEL_DESCRIPTION": "Maintenance category: 0=No maintenance (RUL>100), 1=Routine (50<RUL\u2264100), 2=Priority (25<RUL\u226450), 3=Immediate (RUL\u226425)",
+  "DATASET_INFO": {
+    "source": "FD002",
+    "engines": 260,
+    "operating_conditions": 6,
+    "fault_modes": "HPC_Degradation"
+  }
+}

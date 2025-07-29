@@ -601,7 +601,7 @@ class TreeOfThoughtsGraph:
             wrapped_code = f"```python\n{code}\n```"
             
             # Set up executor
-            executor = LocalCommandLineCodeExecutor(timeout=60)  # Extended timeout
+            executor = LocalCommandLineCodeExecutor(timeout=200)  # Extended timeout
             code_executor_agent = ConversableAgent(
                 "executor",
                 llm_config=False,
@@ -1023,6 +1023,10 @@ class TreeOfThoughtsGraph:
         failed_executions = state.get("consecutive_failures", 0)
         
         # Create the standardized output
+        if not final_metrics:
+            # If no final metrics were computed, use initial metrics as fallback
+            final_metrics = initial_metrics.copy()
+
         result = {
             "agent_name": "tot",
             "initial_code": initial_code,

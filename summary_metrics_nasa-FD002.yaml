@@ -1,0 +1,358 @@
+improver:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    from sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionaries\n\
+    model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\nmodel_old_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\ntry:\n    # Load\
+    \ data from specified folder\n    dataset_folder = \"datasets/nasa-FD002\"\n \
+    \   X_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\n    X_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\n    y_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n    y_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n    X_train_new = pd.read_csv(f\"\
+    {dataset_folder}/X_train_new.csv\")\n    X_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\"\
+    )\n    y_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\n    y_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n    # print data shapes\n    print(f\"Old X_train shape:\
+    \ {X_train_old.shape}\")\n    print(f\"Old X_test shape: {X_test_old.shape}\"\
+    )\n    print(f\"Old y_train shape: {y_train_old.shape}\")\n    print(f\"Old y_test\
+    \ shape: {y_test_old.shape}\")\n    print(f\"New X_train shape: {X_train_new.shape}\"\
+    )\n    print(f\"New X_test shape: {X_test_new.shape}\")\n    print(f\"New y_train\
+    \ shape: {y_train_new.shape}\")\n    print(f\"New y_test shape: {y_test_new.shape}\"\
+    )\n\n    # Train and evaluate old model\n    model_old = RandomForestClassifier(random_state=42)\n\
+    \    model_old.fit(X_train_old, y_train_old)\n\n    # Test old model on old test\
+    \ set\n    old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))\n\
+    \    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')\n\
+    \    model_old_score['on_old_data'] = float(old_score_old)\n\n    # Test old model\
+    \ on new test set\n    old_score_new = accuracy_score(y_test_new, model_old.predict(X_test_new))\n\
+    \    print(f'Old model evaluated on the new distribution: {old_score_new}')\n\
+    \    model_old_score['on_new_data'] = float(old_score_new)\n\n    # Save old model\
+    \ metrics\n    with open('old_metrics.yaml', 'w') as f:\n        yaml.dump({'model_old_score':\
+    \ model_old_score}, f)\n\n    print(\"\\nTraining new model on combined data...\"\
+    )\n\n    # Combine data\n    X_train = pd.concat([X_train_old, X_train_new])\n\
+    \    y_train = pd.concat([y_train_old, y_train_new])\n\n    # print combined data\
+    \ shapes\n    print(f\"Combined X_train shape: {X_train.shape}\")\n    print(f\"\
+    Combined X_test shape: {X_test_new.shape}\")\n    print(f\"Combined y_train shape:\
+    \ {y_train.shape}\")\n    print(f\"Combined y_test shape: {y_test_new.shape}\"\
+    )\n\n    # Train new model on combined dataset\n    model_new = RandomForestClassifier(random_state=42)\n\
+    \    model_new.fit(X_train, y_train)\n\n    # Test new model on old test set\n\
+    \    new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))\n\
+    \    print(f'New model trained and evaluated on old distribution: {new_score_old}')\n\
+    \    model_new_score['on_old_data'] = float(new_score_old)\n\n    # Test new model\
+    \ on new test set\n    new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))\n\
+    \    print(f'New model evaluated on new distribution: {new_score_new}')\n    model_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n    # Save new model metrics\n    with open('fast_graph_metrics.yaml',\
+    \ 'w') as f:\n        yaml.dump({'model_new_score': model_new_score}, f)\n\nexcept\
+    \ FileNotFoundError as e:\n    print(f\"Required data file not found: {str(e)}\"\
+    )\n    print(\"Ensure all train/test files for old and new data exist.\")\nexcept\
+    \ Exception as e:\n    print(f\"Error during model training/evaluation: {str(e)}\"\
+    )"
+  final_metrics:
+    old_distribution: 0.70375
+    new_distribution: 0.5225
+plan_execute:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.preprocessing import\
+    \ LabelEncoder\nfrom sklearn.model_selection import StratifiedKFold\nfrom sklearn.ensemble\
+    \ import RandomForestClassifier\nfrom sklearn.metrics import accuracy_score\n\n\
+    # Initialize metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+    \    'on_old_data': 0.0\n}\n\n# Load data from specified folder\ndataset_folder\
+    \ = \"datasets/nasa-FD002\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+    )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n\
+    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+    )\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\ny_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\n\
+    X_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Apply LabelEncoder\
+    \ for categorical feature 'Maintenance_Status'\nle = LabelEncoder()\ny_train_old\
+    \ = le.fit_transform(y_train_old)\ny_test_old = le.transform(y_test_old)\ny_train_new\
+    \ = le.fit_transform(y_train_new)\ny_test_new = le.transform(y_test_new)\n\n#\
+    \ Define stratifiedKFold for splitting data\nskf = StratifiedKFold(n_splits=5,\
+    \ shuffle=True, random_state=42)\n\n# Scale numerical features using MinMaxScaler\n\
+    scaler = MinMaxScaler()\nX_train_old_scaled = scaler.fit_transform(X_train_old[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+    \ 'Burner_fuel_air_ratio']])\nX_test_old_scaled = scaler.transform(X_test_old[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+    \ 'Burner_fuel_air_ratio']])\nX_train_new_scaled = scaler.fit_transform(X_train_new[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+    \ 'Burner_fuel_air_ratio']])\nX_test_new_scaled = scaler.transform(X_test_new[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+    \ 'Burner_fuel_air_ratio']])\n\n# Combine old and new data for training\nX_train_combined\
+    \ = pd.concat([X_train_old_scaled, X_train_new_scaled])\ny_train_combined = pd.concat([y_train_old,\
+    \ y_train_new])\n\n# Split the combined dataset into training and testing sets\
+    \ using stratifiedKFold\nX_train_combined_train, X_train_combined_test, y_train_combined_train,\
+    \ y_train_combined_test = next(skf.split(X_train_combined, y_train_combined))\n\
+    \n# Train a RandomForestClassifier with stratifiedKFold\nmodel = RandomForestClassifier(n_estimators=150,\
+    \ max_depth=5, random_state=42)\nmodel.fit(X_train_combined_train, y_train_combined_train)\n\
+    \n# Evaluate model on old test set\nold_score = accuracy_score(y_test_old, model.predict(scaler.transform(X_test_old[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+    \ 'Burner_fuel_air_ratio']])))\nprint(f'New model evaluated on old distribution:\
+    \ {old_score}')\nmodel_new_score['on_old_data'] = float(old_score)\n\n# Evaluate\
+    \ model on new test set\nnew_score = accuracy_score(y_test_new, model.predict(X_test_new_scaled))\n\
+    print(f'New model evaluated on new distribution: {new_score}')\nmodel_new_score['on_new_data']\
+    \ = float(new_score)\n\n# Save metrics\nwith open('metrics_plan_execute.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+  final_metrics:
+    old_distribution: 0.72125
+    new_distribution: 0.265
+standard:
+  final_code: "import pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    from sklearn.model_selection import train_test_split\nfrom sklearn.preprocessing\
+    \ import StandardScaler\nfrom sklearn.metrics import accuracy_score\n\n# Initialize\
+    \ metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data':\
+    \ 0.0\n}\n\n# Load data from specified folder\ndataset_folder = \"datasets/nasa-FD002\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# Load new data\nX_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new = pd.read_csv(f\"\
+    {dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\"\
+    ).squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n# Combine old and new data\nX_train = pd.concat([X_train_old,\
+    \ X_train_new])\ny_train = pd.concat([y_train_old, y_train_new])\nX_test = pd.concat([X_test_old,\
+    \ X_test_new])\n\n# Split data into training and validation sets\nX_train, X_val,\
+    \ y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)\n\
+    \n# Scale data using StandardScaler\nscaler = StandardScaler()\nX_train_scaled\
+    \ = scaler.fit_transform(X_train)\nX_val_scaled = scaler.transform(X_val)\nX_test_scaled\
+    \ = scaler.transform(X_test)\n\n# Try increasing the number of estimators for\
+    \ better model capacity\nmodel_new = RandomForestClassifier(\n    n_estimators=500,\n\
+    \    random_state=42\n)\n\nmodel_new.fit(X_train_scaled, y_train)\n\n# Evaluate\
+    \ new model on validation set\nnew_score_val = accuracy_score(y_val, model_new.predict(X_val_scaled))\n\
+    print(f'New model evaluated on validation set: {new_score_val}')\nmodel_new_score['on_old_data']\
+    \ = float(new_score_val)\n\n# Evaluate new model on test set\nnew_score_test =\
+    \ accuracy_score(y_test_new, model_new.predict(X_test_scaled))\nprint(f'New model\
+    \ evaluated on test set: {new_score_test}')\nmodel_new_score['on_new_data'] =\
+    \ float(new_score_test)\n\n# Save metrics\nwith open('metrics_baseline.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+  final_metrics:
+    old_distribution: 0.72125
+    new_distribution: 0.265
+slow:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    \n# Initialize metrics dictionaries\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+    \    'on_old_data': 0.0\n}\nmodel_old_score = {\n    'on_new_data': 0.0,\n   \
+    \ 'on_old_data': 0.0\n}\n\n# load the old data\ndataset_folder = \"datasets/nasa-FD002\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# load new data\nX_train_new\
+    \ = pd.read_csv(f\"datasets/nasa-FD002/X_train_new.csv\")\nX_test_new = pd.read_csv(f\"\
+    datasets/nasa-FD002/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"datasets/nasa-FD002/y_train_new.csv\"\
+    ).squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"datasets/nasa-FD002/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n# print data shapes\nprint(f\"Old X_train shape: {X_train_old.shape}\"\
+    )\nprint(f\"Old X_test shape: {X_test_old.shape}\")\nprint(f\"Old y_train shape:\
+    \ {y_train_old.shape}\")\nprint(f\"Old y_test shape: {y_test_old.shape}\")\nprint(f\"\
+    New X_train shape: {X_train_new.shape}\")\nprint(f\"New X_test shape: {X_test_new.shape}\"\
+    )\nprint(f\"New y_train shape: {y_train_new.shape}\")\nprint(f\"New y_test shape:\
+    \ {y_test_new.shape}\")\n\n# Train and evaluate old model\nmodel_old = RandomForestClassifier(random_state=42)\n\
+    model_old.fit(X_train_old, y_train_old)\n\n# Test old model on old test set\n\
+    old_score_old = model_old.score(X_test_old, y_test_old)\nprint(f'Old model trained\
+    \ and evaluated on the old distribution: {old_score_old}')\nmodel_old_score['on_old_data']\
+    \ = float(old_score_old)\n\n# Test old model on new test set\nold_score_new =\
+    \ model_old.score(X_test_new, y_test_new)\nprint(f'Old model evaluated on the\
+    \ new distribution: {old_score_new}')\nmodel_old_score['on_new_data'] = float(old_score_new)\n\
+    \n# Save old model metrics\nwith open('old_metrics.yaml', 'w') as f:\n    yaml.dump({'model_old_score':\
+    \ model_old_score}, f)\n\nprint(\"\\nTraining new model on combined data...\"\
+    )\n\n# Combine data\nX_train = pd.concat([X_train_old, X_train_new])\ny_train\
+    \ = pd.concat([y_train_old, y_train_new])\n\n# print combined data shapes\nprint(f\"\
+    Combined X_train shape: {X_train.shape}\")\nprint(f\"Combined X_test shape: {X_test_new.shape}\"\
+    )\nprint(f\"Combined y_train shape: {y_train.shape}\")\nprint(f\"Combined y_test\
+    \ shape: {y_test_new.shape}\")\n\n# Train new model on combined dataset\nmodel_new\
+    \ = RandomForestClassifier(random_state=42)\nmodel_new.fit(X_train, y_train)\n\
+    \n# Test new model on old test set\nnew_score_old = model_new.score(X_test_old,\
+    \ y_test_old)\nprint(f'New model trained and evaluated on old distribution: {new_score_old}')\n\
+    model_new_score['on_old_data'] = float(new_score_old)\n\n# Test new model on new\
+    \ test set\nnew_score_new = model_new.score(X_test_new, y_test_new)\nprint(f'New\
+    \ model evaluated on new distribution: {new_score_new}')\nmodel_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n# Save new model metrics\nwith open('fast_graph_metrics.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.70375
+    new_distribution: 0.5225
+tot:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier,\
+    \ VotingClassifier\nfrom sklearn.model_selection import train_test_split\nfrom\
+    \ sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionary\nmodel_new_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load data from\
+    \ specified folder\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old = pd.read_csv(f\"\
+    {dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\"\
+    )\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"\
+    columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"\
+    columns\")\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Combine old and new data\nX_train = pd.concat([X_train_old, X_train_new])\n\
+    y_train = pd.concat([y_train_old, y_train_new])\n\n# Split data into training\
+    \ and validation sets\nX_train_val, X_val, y_train_val, y_val = train_test_split(X_train,\
+    \ y_train, test_size=0.2, random_state=42)\n\n# Define baseline model\nmodel1\
+    \ = RandomForestClassifier(n_estimators=100, random_state=42)\n\n# Define ensemble\
+    \ model\nensemble = VotingClassifier(estimators=[('rf', model1)], voting='soft')\n\
+    \n# Train baseline model\nmodel1.fit(X_train_val, y_train_val)\n\n# Train ensemble\
+    \ model\nensemble.fit(X_train_val, y_train_val)\n\n# Evaluate baseline model on\
+    \ old distribution\nold_accuracy = accuracy_score(y_test_old, model1.predict(X_test_old))\n\
+    print(f'Baseline model evaluated on the old distribution: {old_accuracy}')\nmodel_new_score['on_old_data']\
+    \ = float(old_accuracy)\n\n# Evaluate ensemble model on old distribution\nensemble_accuracy\
+    \ = accuracy_score(y_test_old, ensemble.predict(X_test_old))\nprint(f'Ensemble\
+    \ model evaluated on the old distribution: {ensemble_accuracy}')\n\n# Evaluate\
+    \ both models on new distribution\nnew_accuracy_model1 = accuracy_score(y_test_new,\
+    \ model1.predict(X_test_new))\nnew_accuracy_ensemble = accuracy_score(y_test_new,\
+    \ ensemble.predict(X_test_new))\nprint(f'Baseline model evaluated on new distribution:\
+    \ {new_accuracy_model1}')\nprint(f'Ensemble model evaluated on new distribution:\
+    \ {new_accuracy_ensemble}')\n\n# Save metrics\nmodel_new_score['on_new_data']\
+    \ = float(new_accuracy_ensemble)\n\nwith open('metrics_tot.yaml', 'w') as f:\n\
+    \    yaml.dump({'model_new_score': model_new_score}, f)\n\n# Print final metrics\n\
+    print(f'Final model evaluation metrics on new data: {model_new_score}')\n"
+  final_metrics:
+    old_distribution: 0.6825
+    new_distribution: 0.51
+fast:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    \n# Initialize metrics dictionaries\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+    \    'on_old_data': 0.0\n}\nmodel_old_score = {\n    'on_new_data': 0.0,\n   \
+    \ 'on_old_data': 0.0\n}\n\n# Train old model\nmodel_old = RandomForestClassifier(random_state=42)\n\
+    \n# load the old data\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old =\
+    \ pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+    {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+    ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+    ).squeeze(\"columns\")\n\nmodel_old.fit(X_train_old, y_train_old)\n\n# Test old\
+    \ model on old test set\nold_score_old = model_old.score(X_test_old, y_test_old)\n\
+    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')\n\
+    model_old_score['on_old_data'] = float(old_score_old)\n\n# Test old model on new\
+    \ test set\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\nold_score_new\
+    \ = model_old.score(X_test_new, y_test_new)\nprint(f'Old model evaluated on the\
+    \ new distribution: {old_score_new}')\nmodel_old_score['on_new_data'] = float(old_score_new)\n\
+    \n# Save old model metrics\nwith open('old_metrics.yaml', 'w') as f:\n    yaml.dump({'model_old_score':\
+    \ model_old_score}, f)\n\nprint(\"\\nTraining new model on combined data...\"\
+    )\n\n# load and combine new training data\nX_train_new = pd.read_csv(f\"datasets/nasa-FD002/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"datasets/nasa-FD002/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_train = pd.concat([X_train_old, X_train_new])\ny_train = pd.concat([y_train_old,\
+    \ y_train_new])\n\n# Train new model on combined dataset\nmodel_new = RandomForestClassifier(random_state=42)\n\
+    model_new.fit(X_train, y_train)\n\n# Test new model on old test set\nnew_score_old\
+    \ = model_new.score(X_test_old, y_test_old)\nprint(f'New model trained and evaluated\
+    \ on old distribution: {new_score_old}')\nmodel_new_score['on_old_data'] = float(new_score_old)\n\
+    \n# Test new model on new test set\nnew_score_new = model_new.score(X_test_new,\
+    \ y_test_new)\nprint(f'New model evaluated on new distribution: {new_score_new}')\n\
+    model_new_score['on_new_data'] = float(new_score_new)\n\n# Save new model metrics\n\
+    with open('fast_graph_metrics.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.70375
+    new_distribution: 0.5225
+self_discovery:
+  final_code: "dataset_folder = \"datasets/healthcare\"\nfrom sklearn.ensemble import\
+    \ GradientBoostingClassifier, RandomForestClassifier\nimport pandas as pd\nimport\
+    \ numpy as np\nimport yaml\nfrom sklearn.preprocessing import StandardScaler\n\
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier\n\
+    from sklearn.metrics import accuracy_score\n\n# Initialize metrics\nmodel_new_score\
+    \ = {\n    'on_old_data': 0.0,\n    'on_new_data': 0.0\n}\n\n# Load data - USE\
+    \ THESE EXACT PATHS\ndataset_folder = \"datasets/financial\"\nX_train_old = pd.read_csv(f\"\
+    {dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\"\
+    )\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"\
+    columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"\
+    columns\")\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\n\
+    y_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\"\
+    )\n\n# Combine datasets\nX_train_combined = pd.concat([X_train_old, X_train_new])\n\
+    y_train_combined = pd.concat([y_train_old, y_train_new])\n\n# [YOUR PREPROCESSING\
+    \ CODE HERE]\n# Scaler for settings\nscaler = StandardScaler()\nX_train_combined[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']]\
+    \ = scaler.fit_transform(X_train_combined[['Setting_1', 'Setting_2', 'Setting_3',\
+    \ 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']])\n\nX_test_old[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']]\
+    \ = scaler.transform(X_test_old[['Setting_1', 'Setting_2', 'Setting_3', 'Setting_4',\
+    \ 'Setting_5', 'Setting_6', 'Setting_7']])\nX_test_new[['Setting_1', 'Setting_2',\
+    \ 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']] = scaler.transform(X_test_new[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']])\n\
+    \n# Train model\n#model = GradientBoostingClassifier(random_state=42)\nmodel =\
+    \ RandomForestClassifier(n_estimators=100, random_state=42)\nmodel.fit(X_train_combined,\
+    \ y_train_combined)\n\n# Evaluate on old distribution\nold_score = accuracy_score(y_test_old,\
+    \ model.predict(X_test_old))\nprint(f'Model evaluated on old distribution: {old_score}')\n\
+    model_new_score['on_old_data'] = float(old_score)\n\n# Evaluate on new distribution\n\
+    new_score = accuracy_score(y_test_new, model.predict(X_test_new))\nprint(f'Model\
+    \ evaluated on new distribution: {new_score}')\nmodel_new_score['on_new_data']\
+    \ = float(new_score)\n\n# Save metrics\nwith open('metrics_self_discovery.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.72125
+    new_distribution: 0.265
+react:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import GradientBoostingClassifier\n\
+    \n# Initialize metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+    \    'on_old_data': 0.0\n}\n\n# Load old and new data\ndataset_folder = \"datasets/nasa-FD002\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# Load new data\nX_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\ny_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\nX_test_new = pd.read_csv(f\"\
+    {dataset_folder}/X_test_new.csv\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n# Combine training data\nX_train = pd.concat([X_train_old,\
+    \ X_train_new])\ny_train = pd.concat([y_train_old, y_train_new])\n\n# Create and\
+    \ train model with parameters optimized for classification problems\nmodel_new\
+    \ = GradientBoostingClassifier(\n    n_estimators=500,\n    learning_rate=0.1,\n\
+    \    max_depth=3,\n    subsample=0.9,\n    min_samples_split=10,\n    min_samples_leaf=5\n\
+    )\nmodel_new.fit(X_train, y_train)\n\n# Evaluate on old distribution\nnew_score_old\
+    \ = model_new.score(X_test_old, y_test_old)\nprint(f'New model trained and evaluated\
+    \ on old distribution: {new_score_old}')\nmodel_new_score['on_old_data'] = float(new_score_old)\n\
+    \n# Evaluate on new distribution\nnew_score_new = model_new.score(X_test_new,\
+    \ y_test_new)\nprint(f'New model evaluated on new distribution: {new_score_new}')\n\
+    model_new_score['on_new_data'] = float(new_score_new)\n\n# Save metrics\nwith\
+    \ open('metrics_react.yaml', 'w') as f:\n    yaml.dump({'model_new_score': model_new_score},\
+    \ f)\n"
+  final_metrics:
+    old_distribution: 0.6925
+    new_distribution: 0.5125
+reflection:
+  final_code: "import yaml\nimport pandas as pd\nimport numpy as np\nfrom sklearn.preprocessing\
+    \ import RobustScaler, OneHotEncoder, OrdinalEncoder\nfrom sklearn.compose import\
+    \ ColumnTransformer\nfrom sklearn.pipeline import Pipeline\nfrom sklearn.ensemble\
+    \ import GradientBoostingClassifier\nfrom sklearn.model_selection import train_test_split,\
+    \ RandomizedSearchCV\nfrom sklearn.metrics import accuracy_score\nfrom scipy.stats\
+    \ import randint\n\n# Initialize metrics dictionary\nmodel_new_score = {\n   \
+    \ 'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load data from specified\
+    \ folder\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old = pd.read_csv(f\"\
+    {dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\"\
+    )\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"\
+    columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"\
+    columns\")\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Define preprocessing steps\nnumerical_features = ['Setting_1', 'Setting_2',\
+    \ 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+    \ 'Burner_fuel_air_ratio']\ncategorical_features = []\n\nfor col in X_train_old.columns:\n\
+    \    if pd.api.types.is_object_dtype(X_train_old[col]):\n        categorical_features.append(col)\n\
+    \nordinal_features = ['Setting_1', 'Setting_2', 'Setting_3'] # assuming ordinal\
+    \ features, check with domain knowledge\n\n# Create preprocessing pipeline\npreprocessor\
+    \ = ColumnTransformer(\n    transformers=[\n        ('num', RobustScaler(), numerical_features),\n\
+    \        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features),\n\
+    \        ('ord', OrdinalEncoder(), ordinal_features)\n    ],\n    remainder='passthrough'\n\
+    )\n\n# Define hyperparameters to search over\nparam_grid = {\n    'classifier__n_estimators':\
+    \ [50, 100],\n    'classifier__learning_rate': [0.1, 0.5],\n    'classifier__max_depth':\
+    \ [3, 5],\n    'classifier__subsample': [0.5, 0.8]\n}\n\n# Create pipeline with\
+    \ preprocessing and model\npipeline = Pipeline([\n    ('preprocessor', preprocessor),\n\
+    \    ('classifier', GradientBoostingClassifier(random_state=42))\n])\n\n# Combine\
+    \ old and new training data\nX_train_combined = pd.concat([X_train_old, X_train_new])\n\
+    y_train_combined = pd.concat([y_train_old, y_train_new])\n\n# Ensure all column\
+    \ names are strings to avoid type errors\nX_train_combined.columns = X_train_combined.columns.astype(str)\n\
+    X_test_old.columns = X_test_old.columns.astype(str)\nX_test_new.columns = X_test_new.columns.astype(str)\n\
+    \n# Split the combined data into training and validation sets\nX_train_combined_split,\
+    \ X_val_combined, y_train_combined_split, y_val_combined = train_test_split(X_train_combined,\
+    \ y_train_combined, test_size=0.2, random_state=42)\n\n# Perform RandomizedSearchCV\
+    \ to optimize hyperparameters\nrandom_search = RandomizedSearchCV(\n    pipeline,\n\
+    \    param_distributions=param_grid,\n    n_iter=5,\n    cv=5,\n    scoring='f1_macro',\n\
+    \    random_state=42,\n    n_jobs=-1  # This will use all available cores for\
+    \ faster computation\n)\nrandom_search.fit(X_train_combined_split, y_train_combined_split)\n\
+    \n# Get optimized pipeline\nopt_pipeline = random_search.best_estimator_\n\n#\
+    \ Evaluate on old distribution\nold_predictions = opt_pipeline.predict(X_test_old)\n\
+    old_score = accuracy_score(y_test_old, old_predictions)\nprint(f'New model evaluated\
+    \ on old distribution: {old_score}')\nmodel_new_score['on_old_data'] = float(old_score)\n\
+    \n# Evaluate on new distribution\nnew_predictions = opt_pipeline.predict(X_test_new)\n\
+    new_score = accuracy_score(y_test_new, new_predictions)\nprint(f'New model evaluated\
+    \ on new distribution: {new_score}')\nmodel_new_score['on_new_data'] = float(new_score)\n\
+    \n# Save metrics\nwith open('metrics_reflection.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.695
+    new_distribution: 0.47625

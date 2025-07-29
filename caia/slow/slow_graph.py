@@ -1080,7 +1080,7 @@ class SlowGraph:
         """Execute code using the code executor."""
         wrapped_code = f"```python\n{code}\n```"
         executor = LocalCommandLineCodeExecutor(
-            timeout=10,
+            timeout=60,
             work_dir=".",
         )
         code_executor_agent = ConversableAgent(
@@ -1133,7 +1133,23 @@ class SlowGraph:
             # Read old model metrics
             with open('old_metrics.yaml', 'r') as f:
                 old_metrics = yaml.safe_load(f)
-                old_model_score = old_metrics.get('model_old_score', {})
+                baseline_old_model_score = old_metrics.get('model_old_score', {})
+            
+            # Use Fast Graph metrics as baseline if available and better than old model
+            fast_graph_metrics = state['generations_slow_graph'].get('fast_graph_metrics', {})
+            if fast_graph_metrics and 'new_model' in fast_graph_metrics:
+                fast_graph_score = fast_graph_metrics['new_model']
+                # Compare Fast Graph vs baseline and use the better one as comparison baseline
+                if (fast_graph_score.get('on_new_data', 0) >= baseline_old_model_score.get('on_new_data', 0) and
+                    fast_graph_score.get('on_old_data', 0) >= baseline_old_model_score.get('on_old_data', 0)):
+                    old_model_score = fast_graph_score
+                    print("Using Fast Graph metrics as baseline for comparison")
+                else:
+                    old_model_score = baseline_old_model_score
+                    print("Using original old model metrics as baseline")
+            else:
+                old_model_score = baseline_old_model_score
+                print("No Fast Graph metrics available, using original baseline")
             
             # Read new model metrics - prioritize the slow graph metric file if available
             if os.path.exists('slow_graph_metrics.yaml'):
@@ -1245,13 +1261,32 @@ class SlowGraph:
         
         # Update improvement entry with evaluation results, with proper error handling
         try:
+            # Check methodology validation first
+            methodology_check = evaluation_result.get('methodology_check', {})
+            valid_evaluation = methodology_check.get('valid_evaluation', True)  # Default to True for backward compatibility
+            
             recommendation = evaluation_result.get('recommendation', {})
             action = recommendation.get('action', 'reject')  # Default to reject if not found
+            
+            # If methodology is invalid, force rejection regardless of performance
+            if not valid_evaluation:
+                print(f"WARNING: Invalid evaluation methodology detected. Forcing rejection.")
+                print(f"Issues found: {methodology_check.get('issues_found', [])}")
+                action = 'reject'
+                
+                # Update recommendation in evaluation result
+                evaluation_result['recommendation'] = {
+                    **recommendation,
+                    'action': 'reject',
+                    'confidence': 'high',
+                    'reasoning': f"Invalid evaluation methodology: {methodology_check.get('issues_found', [])}"
+                }
             
             updated_improvement = {
                 **latest_improvement,
                 'evaluation': evaluation_result,
-                'final_outcome': action
+                'final_outcome': action,
+                'methodology_valid': valid_evaluation  # Track methodology validity
             }
             
             # Replace the latest improvement with updated version
@@ -1263,6 +1298,12 @@ class SlowGraph:
                 strategy_results = state['generations_slow_graph'].get('strategy_results', {})
                 if current_strategy in strategy_results:
                     strategy_results[current_strategy]['tried'] = True
+                    
+                    # Track methodology issues at strategy level
+                    if not valid_evaluation:
+                        methodology_issues = strategy_results[current_strategy].get('methodology_issues', [])
+                        methodology_issues.extend(methodology_check.get('issues_found', []))
+                        strategy_results[current_strategy]['methodology_issues'] = methodology_issues
                     
                     # Update strategy-specific information
                     if current_strategy == 'model_selection':
@@ -1288,14 +1329,31 @@ class SlowGraph:
             # Store evaluation in state
             state['generations_slow_graph']['evaluation'] = evaluation_result
             
+            # Log methodology validation results
+            if not valid_evaluation:
+                print(f"❌ Methodology validation failed: {methodology_check.get('issues_found', [])}")
+            else:
+                print(f"✅ Methodology validation passed")
+                
+            print(f"Final recommendation: {action}")
+            
         except Exception as e:
             print(f"Error updating improvement entry: {str(e)}")
             # Create a minimal evaluation result if there's an error
             state['generations_slow_graph']['evaluation'] = {
+                'methodology_check': {'valid_evaluation': False, 'issues_found': [f'Evaluation error: {str(e)}']},
                 'recommendation': {'action': 'reject', 'confidence': 'low'},
                 'analysis': [f'Error in evaluation: {str(e)}'],
                 'next_steps': ['Retry with different approach']
             }
+            
+            # Also update the improvement history with error information
+            try:
+                state['improvement_history'][-1]['evaluation'] = state['generations_slow_graph']['evaluation']
+                state['improvement_history'][-1]['final_outcome'] = 'reject'
+                state['improvement_history'][-1]['methodology_valid'] = False
+            except:
+                pass  # Fail silently if we can't update improvement history
         
         return state
         
@@ -1552,7 +1610,7 @@ class SlowGraph:
         token_count = self._estimate_total_tokens(state, final_code)
                 
         # Build the standardized output
-        return {
+        output = {
             "agent_name": "slow",
             "initial_code": initial_code,
             "initial_metrics": initial_metrics,
@@ -1569,6 +1627,30 @@ class SlowGraph:
                 "evaluation_timestamp": datetime.utcnow().isoformat() + "Z"
             }
         }
+        
+        # Check if we should revert to Fast Graph metrics if they're better
+        fast_graph_metrics = state['generations_slow_graph'].get('fast_graph_metrics', {})
+        if fast_graph_metrics and 'new_model' in fast_graph_metrics:
+            fast_graph_score = fast_graph_metrics['new_model']
+            fast_graph_final_metrics = {
+                "old_distribution": fast_graph_score.get("on_old_data", 0),
+                "new_distribution": fast_graph_score.get("on_new_data", 0)
+            }
+            
+            # Compare Fast Graph vs current final metrics
+            current_total = final_metrics.get("old_distribution", 0) + final_metrics.get("new_distribution", 0)
+            fast_graph_total = fast_graph_final_metrics.get("old_distribution", 0) + fast_graph_final_metrics.get("new_distribution", 0)
+            
+            if fast_graph_total > current_total:
+                print(f"Reverting to Fast Graph metrics: Fast Graph total={fast_graph_total:.4f} > Slow Graph total={current_total:.4f}")
+                output["final_metrics"] = fast_graph_final_metrics
+                output["final_code"] = state['generations_slow_graph'].get('fast_graph_code', final_code)
+                output["reverted_to_fast_graph"] = True
+            else:
+                print(f"Keeping Slow Graph results: Slow Graph total={current_total:.4f} >= Fast Graph total={fast_graph_total:.4f}")
+                output["reverted_to_fast_graph"] = False
+        
+        return output
 
     def _estimate_total_tokens(self, state: WorkingMemory, final_code: str) -> int:
         """Estimate total tokens used throughout the slow graph execution."""

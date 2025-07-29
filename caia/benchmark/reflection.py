@@ -1007,6 +1007,9 @@ class ReflectionGraph:
             "total": self.token_counts["total"]
         })
         
+        if not final_metrics:
+            final_metrics = initial_metrics.copy()
+
         # Create the standardized output
         result = {
             "agent_name": "reflection",

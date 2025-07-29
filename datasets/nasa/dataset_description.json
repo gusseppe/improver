@@ -1,0 +1,58 @@
+{
+  "NUM_SAMPLES": 10000,
+  "FEATURES": [
+    "LPC_outlet_temperature",
+    "HPC_outlet_temperature",
+    "LPT_outlet_temperature",
+    "Bypass_duct_pressure",
+    "HPC_outlet_pressure",
+    "Physical_fan_speed",
+    "Physical_core_speed",
+    "HPC_outlet_static_pressure",
+    "Fuel_flow_ratio",
+    "Corrected_fan_speed",
+    "Bypass_ratio",
+    "Bleed_enthalpy",
+    "HPT_cool_air_flow",
+    "LPT_cool_air_flow"
+  ],
+  "NUMERICAL_FEATURES": [
+    "LPC_outlet_temperature",
+    "HPC_outlet_temperature",
+    "LPT_outlet_temperature",
+    "Bypass_duct_pressure",
+    "HPC_outlet_pressure",
+    "Physical_fan_speed",
+    "Physical_core_speed",
+    "HPC_outlet_static_pressure",
+    "Fuel_flow_ratio",
+    "Corrected_fan_speed",
+    "Bypass_ratio",
+    "HPT_cool_air_flow",
+    "LPT_cool_air_flow"
+  ],
+  "CATEGORICAL_FEATURES": [
+    "Bleed_enthalpy"
+  ],
+  "LABEL": "Maintenance_Status",
+  "COLUMN_TYPES": {
+    "LPC_outlet_temperature": "float",
+    "HPC_outlet_temperature": "float",
+    "LPT_outlet_temperature": "float",
+    "Bypass_duct_pressure": "float",
+    "HPC_outlet_pressure": "float",
+    "Physical_fan_speed": "float",
+    "Physical_core_speed": "float",
+    "HPC_outlet_static_pressure": "float",
+    "Fuel_flow_ratio": "float",
+    "Corrected_fan_speed": "float",
+    "Bypass_ratio": "float",
+    "Bleed_enthalpy": "int",
+    "HPT_cool_air_flow": "float",
+    "LPT_cool_air_flow": "float",
+    "Maintenance_Status": "int"
+  },
+  "DATASET_TITLE": "NASA Turbofan Maintenance Windows Classification Dataset",
+  "DATASET_DESCRIPTION": "NASA turbofan dataset converted to maintenance windows classification: 0=No_Maintenance, 1=Routine_Maintenance, 2=Priority_Maintenance, 3=Immediate_Maintenance.",
+  "LABEL_DESCRIPTION": "Maintenance category: 0=No maintenance (RUL>100), 1=Routine (50<RUL\u2264100), 2=Priority (25<RUL\u226450), 3=Immediate (RUL\u226425)"
+}

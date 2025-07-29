@@ -580,6 +580,10 @@ class StandardGraph:
         # Get token usage from state
         token_usage = state.get("token_usage", {"total": self._estimate_token_usage(state)})
         
+        if not final_metrics:
+            # If no final metrics were computed, use initial metrics as fallback
+            final_metrics = initial_metrics.copy()
+
         # Create the standardized output
         result = {
             "agent_name": "baseline",

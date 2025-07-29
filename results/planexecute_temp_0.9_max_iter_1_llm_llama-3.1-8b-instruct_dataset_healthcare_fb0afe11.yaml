@@ -1,0 +1,101 @@
+agent_name: plan_execute
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/healthcare"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.86
+  new_distribution: 0.7333333333333333
+improvement_plan:
+- Implement Hyperparameter Tuning using GridSearchCV for the GradientBoostingClassifier
+  to find optimal tuning parameters
+- Combine old and new data, preprocess, and split it into training and testing sets
+  for the model
+- Retrain the GradientBoostingClassifier on the combined data without applying HighDimensionalReduction
+  technique again
+- Save performance metrics as model_new_score
+improvement_path: []
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.model_selection import\
+  \ train_test_split\nfrom sklearn.preprocessing import LabelEncoder\nfrom sklearn.ensemble\
+  \ import GradientBoostingClassifier\nfrom sklearn.metrics import accuracy_score\n\
+  from sklearn.model_selection import GridSearchCV\nfrom sklearn.model_selection import\
+  \ RandomizedSearchCV\nfrom scipy.stats import randint\n\n# Initialize metrics dictionary\n\
+  model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Define\
+  \ categorical features to apply Label Encoding\ncategorical_features = [\"Smoking\
+  \ Status\", \"Diet Quality\", \"Family History\", \"Education Level\"]\n\n# Load\
+  \ data from specified folder\ndataset_folder = \"datasets/healthcare\"\nX_train_old\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+  {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+  ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+  ).squeeze(\"columns\")\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\"\
+  )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new =\
+  \ pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Apply\
+  \ Label Encoding to categorical features\nle = LabelEncoder()\nX_train_old[categorical_features]\
+  \ = X_train_old[categorical_features].apply(lambda series: series.astype(\"str\"\
+  ).apply(le.fit_transform))\nX_test_old[categorical_features] = X_test_old[categorical_features].apply(lambda\
+  \ series: series.astype(\"str\").apply(le.fit_transform))\nX_train_new[categorical_features]\
+  \ = X_train_new[categorical_features].apply(lambda series: series.astype(\"str\"\
+  ).apply(le.fit_transform))\nX_test_new[categorical_features] = X_test_new[categorical_features].apply(lambda\
+  \ series: series.astype(\"str\").apply(le.fit_transform))\n\n# Define hyperparameter\
+  \ search space\nparam_grid = {\n    'learning_rate': [0.01, 0.1, 0.5, 1],\n    'n_estimators':\
+  \ [50, 100, 200, 300],\n    'max_depth': [3, 5, 7, 9],\n    'subsample': [0.5, 0.7,\
+  \ 0.9, 1]\n}\n\n# Perform Randomized Search CV to find optimal hyperparameters\n\
+  grid_search = RandomizedSearchCV(estimator=GradientBoostingClassifier(random_state=42),\
+  \ param_distributions=param_grid, cv=5, n_iter=10)\ngrid_search.fit(pd.concat([X_train_old,\
+  \ X_train_new]), pd.concat([y_train_old, y_train_new]))\n\n# Get the best hyperparameters\n\
+  best_params = grid_search.best_params_\n\n# Train GradientBoostingClassifier with\
+  \ optimal hyperparameters\nmodel_new = GradientBoostingClassifier(**best_params,\
+  \ random_state=42)\nmodel_new.fit(pd.concat([X_train_old, X_train_new]), pd.concat([y_train_old,\
+  \ y_train_new]))\n\n# Evaluate model on old test set\nold_score = accuracy_score(y_test_old,\
+  \ model_new.predict(pd.concat([X_test_old, X_test_new])))\nprint(f'New model evaluated\
+  \ on old distribution: {old_score}')\nmodel_new_score['on_old_data'] = float(old_score)\n\
+  \n# Evaluate model on new test set\nnew_score = accuracy_score(y_test_new, model_new.predict(pd.concat([X_test_old,\
+  \ X_test_new])))\nprint(f'New model evaluated on new distribution: {new_score}')\n\
+  model_new_score['on_new_data'] = float(new_score)\n\n# Save metrics\nwith open('metrics_plan_execute.yaml',\
+  \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+final_metrics:
+  old_distribution: 0.86
+  new_distribution: 0.7333333333333333
+runtime_statistics:
+  total_time_seconds: 113.26718783378601
+  iterations: 0
+  tokens_used: 16599
+  prompt_tokens: 12642
+  completion_tokens: 3957
+  iteration_times: []
+  evaluation_timestamp: '2025-07-18T22:45:09.055999Z'
+  execution_attempts: 3
+  successful_executions: 0
+  failed_executions: 3

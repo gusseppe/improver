@@ -1,0 +1,121 @@
+agent_name: slow
+initial_code: ''
+initial_metrics:
+  old_distribution: 0.72125
+  new_distribution: 0.265
+improvement_path:
+- iteration: 1
+  code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import VotingClassifier\n\
+    from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import\
+    \ accuracy_score\nfrom sklearn.model_selection import train_test_split\n\n# Load\
+    \ data from specified folder\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+    {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+    ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+    ).squeeze(\"columns\")\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Define base estimators\nestimators = [\n    ('rf_old', RandomForestClassifier(\n\
+    \        n_estimators=500,\n        criterion='gini',\n        max_depth=None,\n\
+    \        min_samples_leaf=1,\n        min_samples_split=2,\n        n_jobs=-1,\n\
+    \        warm_start=True,\n        random_state=42)),\n    ('rf_new', RandomForestClassifier(\n\
+    \        n_estimators=200,\n        criterion='gini',\n        max_depth=8,\n\
+    \        min_samples_leaf=10,\n        min_samples_split=2,\n        n_jobs=-2,\n\
+    \        warm_start=False,\n        random_state=42))\n]\n\n# Create voting ensemble\n\
+    model = VotingClassifier(estimators, voting='soft')\n\n# Train the ensemble\n\
+    model.fit(X_train_old, y_train_old)\n\n# Evaluate new model on old test set\n\
+    old_accuracy = model.predict_proba(X_test_old)[:, 1]\nold_threshold = 0.5\npredictions\
+    \ = (old_accuracy >= old_threshold).astype(int)\nold_score = accuracy_score(y_test_old,\
+    \ predictions)\nprint(f'Voting ensemble trained and evaluated on old distribution:\
+    \ {old_score}')\n\n# Evaluate new model on new test set\nnew_accuracy = model.predict_proba(X_test_new)[:,\
+    \ 1]\nnew_threshold = 0.5\npredictions = (new_accuracy >= new_threshold).astype(int)\n\
+    new_score = accuracy_score(y_test_new, predictions)\nprint(f'Voting ensemble evaluated\
+    \ on new distribution: {new_score}')\n\n# Save new model metrics\nmodel_new_score\
+    \ = {\n    'on_new_data': float(new_score),\n    'on_old_data': float(old_score)\n\
+    }\nwith open('slow_graph_metrics.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)\n"
+  metrics:
+    old_distribution: 0.73875
+    new_distribution: 0.2175
+  changes:
+  - Applied ensemble_method strategy
+  - Applied voting ensemble method
+  reflection: 'Strategy: ensemble_method
+
+    Evaluation: {''evaluation'': {''methodology_check'': {''valid_evaluation'': True,
+    ''issues_found'': []}, ''performance_metrics'': {''distribution_gaps'': {''previous_gap'':
+    0.136, ''current_gap'': 0.521, ''gap_reduction'': 0.385}, ''improvements'': {''old_distribution'':
+    0.0175, ''new_distribution'': -0.0475}, ''relative_changes'': {''old_distribution_percent'':
+    ''2.43%'', ''new_distribution_percent'': ''-17.92%''}}, ''analysis'': [''Significant
+    regression on new distribution (-17.92%)'', ''Minimal, but not significant improvement
+    on old distribution (2.43%)'', ''Distribution gap increased by 385 percentage
+    points'', ''The ensemble failed to adapt to the new distribution'', ''Trade-off
+    between distributions is not acceptable''], ''risk_assessment'': [''High risk
+    of overfitting on the old distribution'', ''Ensemble failed to transfer knowledge
+    to the new distribution'', ''New distribution performance is significantly worse
+    than the previous model (-17.92%)''], ''strategy_effectiveness'': {''approach'':
+    ''ensemble_method'', ''strengths'': [''Combinations of multiple models into a
+    single ensemble'', ''Can handle complex data distributions'', ''Can adapt to new
+    data distributions''], ''limitations'': [''Failed to adapt to new data distribution'',
+    ''Overfitting on old distribution'', ''Significant regression on new distribution'']},
+    ''recommendation'': {''action'': ''reject'', ''confidence'': ''high'', ''reasoning'':
+    ''The ensemble method failed to adapt to the new distribution, resulting in a
+    significant regression on the new distribution.''}, ''next_steps'': [''Consider
+    model_selection for different base estimators'', ''Try hyperparameter_tuning to
+    improve ensemble performance on the new distribution'']}, ''recommendation'':
+    {''action'': ''reject'', ''confidence'': ''low''}, ''analysis'': [''No analysis
+    provided''], ''next_steps'': [''Retry with different approach'']}'
+  execution_time: 180.036702
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+  \n# Initialize metrics dictionaries\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+  \    'on_old_data': 0.0\n}\nmodel_old_score = {\n    'on_new_data': 0.0,\n    'on_old_data':\
+  \ 0.0\n}\n\n# load the old data\ndataset_folder = \"datasets/nasa-FD002\"\nX_train_old\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+  {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+  ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+  ).squeeze(\"columns\")\n\n# load new data\nX_train_new = pd.read_csv(f\"datasets/nasa-FD002/X_train_new.csv\"\
+  )\nX_test_new = pd.read_csv(f\"datasets/nasa-FD002/X_test_new.csv\")\ny_train_new\
+  \ = pd.read_csv(f\"datasets/nasa-FD002/y_train_new.csv\").squeeze(\"columns\")\n\
+  y_test_new = pd.read_csv(f\"datasets/nasa-FD002/y_test_new.csv\").squeeze(\"columns\"\
+  )\n\n# print data shapes\nprint(f\"Old X_train shape: {X_train_old.shape}\")\nprint(f\"\
+  Old X_test shape: {X_test_old.shape}\")\nprint(f\"Old y_train shape: {y_train_old.shape}\"\
+  )\nprint(f\"Old y_test shape: {y_test_old.shape}\")\nprint(f\"New X_train shape:\
+  \ {X_train_new.shape}\")\nprint(f\"New X_test shape: {X_test_new.shape}\")\nprint(f\"\
+  New y_train shape: {y_train_new.shape}\")\nprint(f\"New y_test shape: {y_test_new.shape}\"\
+  )\n\n# Train and evaluate old model\nmodel_old = RandomForestClassifier(random_state=42)\n\
+  model_old.fit(X_train_old, y_train_old)\n\n# Test old model on old test set\nold_score_old\
+  \ = model_old.score(X_test_old, y_test_old)\nprint(f'Old model trained and evaluated\
+  \ on the old distribution: {old_score_old}')\nmodel_old_score['on_old_data'] = float(old_score_old)\n\
+  \n# Test old model on new test set\nold_score_new = model_old.score(X_test_new,\
+  \ y_test_new)\nprint(f'Old model evaluated on the new distribution: {old_score_new}')\n\
+  model_old_score['on_new_data'] = float(old_score_new)\n\n# Save old model metrics\n\
+  with open('old_metrics.yaml', 'w') as f:\n    yaml.dump({'model_old_score': model_old_score},\
+  \ f)\n\nprint(\"\\nTraining new model on combined data...\")\n\n# Combine data\n\
+  X_train = pd.concat([X_train_old, X_train_new])\ny_train = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# print combined data shapes\nprint(f\"Combined X_train shape:\
+  \ {X_train.shape}\")\nprint(f\"Combined X_test shape: {X_test_new.shape}\")\nprint(f\"\
+  Combined y_train shape: {y_train.shape}\")\nprint(f\"Combined y_test shape: {y_test_new.shape}\"\
+  )\n\n# Train new model on combined dataset\nmodel_new = RandomForestClassifier(random_state=42)\n\
+  model_new.fit(X_train, y_train)\n\n# Test new model on old test set\nnew_score_old\
+  \ = model_new.score(X_test_old, y_test_old)\nprint(f'New model trained and evaluated\
+  \ on old distribution: {new_score_old}')\nmodel_new_score['on_old_data'] = float(new_score_old)\n\
+  \n# Test new model on new test set\nnew_score_new = model_new.score(X_test_new,\
+  \ y_test_new)\nprint(f'New model evaluated on new distribution: {new_score_new}')\n\
+  model_new_score['on_new_data'] = float(new_score_new)\n\n# Save new model metrics\n\
+  with open('fast_graph_metrics.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+  \ model_new_score}, f)"
+final_metrics:
+  old_distribution: 0.70375
+  new_distribution: 0.5225
+runtime_statistics:
+  total_time_seconds: 180.04252
+  iterations: 1
+  tokens_used: 51123
+  prompt_tokens: 0
+  completion_tokens: 0
+  iteration_times:
+  - iteration: 1
+    time: 180.036702
+  evaluation_timestamp: '2025-07-19T02:12:20.551030Z'
+reverted_to_fast_graph: true

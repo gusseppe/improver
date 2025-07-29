@@ -314,7 +314,7 @@ def prompt_execute_step() -> ChatPromptTemplate:
     
     IMPORTANT CONSTRAINTS:
     1. DO NOT use GridSearchCV or any hyperparameter search that takes a long time to run
-    2. Keep the model simple and efficient - avoid complex operations that might timeout
+    2. Keep the model simple and efficient - avoid complex operations that might timeout. Only use sklearn models.
     3. Make sure your Python code syntax is correct without YAML markers inside it
     4. YAML markers like 'changes_made:' should NOT appear in your Python code
     
@@ -1123,6 +1123,9 @@ class PlanAndExecuteGraph:
         })
         
         # Create the standardized output
+        if not final_metrics:
+            final_metrics = initial_metrics.copy()
+            
         result = {
             "agent_name": "plan_execute",
             "initial_code": state.get("model_code", ""),

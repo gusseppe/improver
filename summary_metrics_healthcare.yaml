@@ -1,0 +1,362 @@
+fast:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    \n# Initialize metrics dictionaries\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+    \    'on_old_data': 0.0\n}\nmodel_old_score = {\n    'on_new_data': 0.0,\n   \
+    \ 'on_old_data': 0.0\n}\n\n# load the old data\ndataset_folder = \"datasets/healthcare\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# Train and evaluate\
+    \ old model\nmodel_old = RandomForestClassifier(random_state=42)\nmodel_old.fit(X_train_old,\
+    \ y_train_old)\n\n# Test old model on old test set\nold_score_old = model_old.score(X_test_old,\
+    \ y_test_old)\nprint(f'Old model trained and evaluated on the old distribution:\
+    \ {old_score_old}')\nmodel_old_score['on_old_data'] = float(old_score_old)\n\n\
+    # Test old model on new test set\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\"\
+    )\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\"\
+    )\nold_score_new = model_old.score(X_test_new, y_test_new)\nprint(f'Old model\
+    \ evaluated on the new distribution: {old_score_new}')\nmodel_old_score['on_new_data']\
+    \ = float(old_score_new)\ny_test_new = pd.read_csv(f\"datasets/healthcare/y_test_new.csv\"\
+    ).squeeze(\"columns\")\nold_score_new = model_old.score(X_test_new, y_test_new)\n\
+    model_old_score['on_new_data'] = float(old_score_new)\n\n# Save old model metrics\n\
+    with open('old_metrics.yaml', 'w') as f:\n    yaml.dump({'model_old_score': model_old_score},\
+    \ f)\n\nprint(\"\\nTraining new model on combined data...\")\n\n# load and combine\
+    \ new training data\nX_train_new = pd.read_csv(f\"datasets/healthcare/X_train_new.csv\"\
+    )\nX_train = pd.concat([X_train_old, X_train_new])\ny_train = pd.concat([y_train_old,\
+    \ pd.read_csv(f\"datasets/healthcare/y_train_new.csv\").squeeze(\"columns\")])\n\
+    \n# Train new model on combined dataset\nmodel_new = RandomForestClassifier(random_state=42)\n\
+    model_new.fit(X_train, y_train)\n\n# Test new model on old test set\nnew_score_old\
+    \ = model_new.score(X_test_old, y_test_old)\nprint(f'New model trained and evaluated\
+    \ on old distribution: {new_score_old}')\nmodel_new_score['on_old_data'] = float(new_score_old)\n\
+    \n# Test new model on new test set\nnew_score_new = model_new.score(X_test_new,\
+    \ y_test_new)\nprint(f'New model evaluated on new distribution: {new_score_new}')\n\
+    model_new_score['on_new_data'] = float(new_score_new)\n\n# Save new model metrics\n\
+    with open('fast_graph_metrics.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.87
+    new_distribution: 0.8333333333333334
+self_discovery:
+  final_code: "from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier\n\
+    import yaml\nimport pandas as pd\nimport numpy as np\nfrom sklearn.preprocessing\
+    \ import StandardScaler\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    from sklearn.metrics import accuracy_score\nfrom sklearn.model_selection import\
+    \ train_test_split\n\n# Initialize metrics\nmodel_new_score = {\n    'on_old_data':\
+    \ 0.0,\n    'on_new_data': 0.0\n}\n\n# Load data\ndataset_folder = \"datasets/healthcare\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\nX_train_new = pd.read_csv(f\"\
+    {dataset_folder}/X_train_new.csv\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"\
+    columns\")\n\n# Preprocess numerical features using StandardScaler\nscaler = StandardScaler()\n\
+    X_train_old[['Age', 'BMI', 'Blood Pressure']] = scaler.fit_transform(X_train_old[['Age',\
+    \ 'BMI', 'Blood Pressure']])\nX_test_old[['Age', 'BMI', 'Blood Pressure']] = scaler.transform(X_test_old[['Age',\
+    \ 'BMI', 'Blood Pressure']])\nX_train_new[['Age', 'BMI', 'Blood Pressure']] =\
+    \ scaler.fit_transform(X_train_new[['Age', 'BMI', 'Blood Pressure']])\nX_test_new[['Age',\
+    \ 'BMI', 'Blood Pressure']] = scaler.transform(X_test_new[['Age', 'BMI', 'Blood\
+    \ Pressure']])\n\n# Select top features using correlation analysis\ncorr_matrix\
+    \ = X_train_old.corr()\ntop_features = corr_matrix['Target'].abs().sort_values(ascending=False).index[1:6]\n\
+    \n# Reduce dimensionality using SelectKBest\nselector = SelectKBest(f_classif,\
+    \ k=6)\nX_train_old_reduced = selector.fit_transform(X_train_old[top_features],\
+    \ y_train_old)\nX_test_old_reduced = selector.transform(X_test_old[top_features])\n\
+    X_train_new_reduced = selector.fit_transform(X_train_new[top_features], y_train_new)\n\
+    X_test_new_reduced = selector.transform(X_test_new[top_features])\n\n# Combine\
+    \ datasets\nX_train_combined = pd.concat([X_train_old_reduced, X_train_new_reduced])\n\
+    y_train_combined = pd.concat([y_train_old, y_train_new])\n\n# Train model\nmodel\
+    \ = RandomForestClassifier(random_state=42)\nmodel.fit(X_train_combined, y_train_combined)\n\
+    \n# Evaluate on old distribution\nold_score = accuracy_score(y_test_old, model.predict(X_test_old_reduced))\n\
+    print(f'Model evaluated on old distribution: {old_score}')\nmodel_new_score['on_old_data']\
+    \ = float(old_score)\n\n# Evaluate on new distribution\nnew_score = accuracy_score(y_test_new,\
+    \ model.predict(X_test_new_reduced))\nprint(f'Model evaluated on new distribution:\
+    \ {new_score}')\nmodel_new_score['on_new_data'] = float(new_score)\n\n# Save metrics\n\
+    with open('metrics_self_discovery.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.86
+    new_distribution: 0.7333333333333333
+reflection:
+  final_code: "import yaml\nimport pandas as pd\nimport numpy as np\nfrom sklearn.preprocessing\
+    \ import StandardScaler\nfrom sklearn.compose import ColumnTransformer\nfrom sklearn.pipeline\
+    \ import Pipeline\nfrom sklearn.ensemble import GradientBoostingClassifier\nfrom\
+    \ sklearn.metrics import accuracy_score\nfrom sklearn.preprocessing import OneHotEncoder\n\
+    \n# Initialize metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n\
+    \    'on_old_data': 0.0\n}\n\n# Load data from specified folder\ndataset_folder\
+    \ = \"datasets/healthcare\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+    )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n\
+    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+    )\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Define feature types\nnumerical_features = ['Age', 'BMI', 'Blood Pressure',\
+    \ 'Cholesterol', 'Physical Activity', 'Income']\ncategorical_features = ['Smoking\
+    \ Status', 'Diet Quality', 'Family History', 'Education Level']\n\n# Create preprocessing\
+    \ pipeline for numerical features\nnumerical_transformer = StandardScaler()\n\n\
+    # Create preprocessing pipeline for categorical features\ncategorical_transformer\
+    \ = OneHotEncoder(handle_unknown='ignore')\n\n# Create Column Transformer to choose\
+    \ preprocessing pipeline based on feature types\npreprocessor = ColumnTransformer(\n\
+    \    transformers=[\n        ('num', numerical_transformer, numerical_features),\n\
+    \        ('cat', categorical_transformer, categorical_features)\n    ],\n    remainder='passthrough'\n\
+    )\n\n# Create pipeline with preprocessing and model\npipeline = Pipeline([\n \
+    \   ('preprocessor', preprocessor),\n    ('classifier', GradientBoostingClassifier(\n\
+    \        n_estimators=500,  # Increased number of estimators\n        learning_rate=0.01,\
+    \  # Smaller learning rate\n        max_depth=5,  # Increased maximum depth\n\
+    \        subsample=1.0,  # Did not use subsampling\n        random_state=42\n\
+    \    ))\n])\n\n# Combine old and new training data\nX_train_combined = pd.concat([X_train_old,\
+    \ X_train_new])\ny_train_combined = pd.concat([y_train_old, y_train_new])\n\n\
+    # Ensure all column names are strings to avoid type errors\nX_train_combined.columns\
+    \ = X_train_combined.columns.astype(str)\nX_test_old.columns = X_test_old.columns.astype(str)\n\
+    X_test_new.columns = X_test_new.columns.astype(str)\n\n# Train the pipeline\n\
+    pipeline.fit(X_train_combined, y_train_combined)\n\n# Evaluate on old distribution\n\
+    old_predictions = pipeline.predict(X_test_old)\nold_score = accuracy_score(y_test_old,\
+    \ old_predictions)\nprint(f'New model evaluated on old distribution: {old_score}')\n\
+    model_new_score['on_old_data'] = float(old_score)\n\n# Evaluate on new distribution\n\
+    new_predictions = pipeline.predict(X_test_new)\nnew_score = accuracy_score(y_test_new,\
+    \ new_predictions)\nprint(f'New model evaluated on new distribution: {new_score}')\n\
+    model_new_score['on_new_data'] = float(new_score)\n\n# Save metrics\nwith open('metrics_reflection.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  final_metrics:
+    old_distribution: 0.8733333333333333
+    new_distribution: 0.8
+react:
+  final_code: "import yaml\nimport pandas as pd\nfrom xgboost import XGBClassifier\n\
+    from sklearn.model_selection import train_test_split\nfrom sklearn.model_selection\
+    \ import RandomizedSearchCV\nfrom sklearn.metrics import accuracy_score\nfrom\
+    \ scipy.stats import randint\n\n# Initialize metrics dictionary\nmodel_new_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load old data\n\
+    dataset_folder = \"datasets/healthcare\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+    )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n\
+    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+    )\n\n# Load new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+    )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\
+    # Combine training data\nX_train = pd.concat([X_train_old, X_train_new])\ny_train\
+    \ = pd.concat([y_train_old, y_train_new])\n\n# Define hyperparameter tuning space\n\
+    param_grid = {\n    'max_depth': randint(3, 10),\n    'learning_rate': [0.1, 0.5,\
+    \ 1],\n    'n_estimators': randint(10, 100),\n    'gamma': [0, 0.25, 0.5],\n \
+    \   'subsample': [0.5, 0.75, 1],\n    'colsample_bytree': [0.5, 0.75, 1],\n  \
+    \  'reg_alpha': [0, 0.5, 1]\n}\n\n# Initialize model and hyperparameter search\n\
+    model_new = XGBClassifier()\nrandomized_search = RandomizedSearchCV(model_new,\
+    \ param_grid, cv=5, n_iter=10, random_state=42)\n\n# Perform hyperparameter tuning\
+    \ on combined training data\nrandomized_search.fit(X_train, y_train)\n\n# Evaluate\
+    \ on old distribution\nnew_score_old = accuracy_score(y_test_old, randomized_search.predict(X_test_old))\n\
+    print(f'New model trained and evaluated on old distribution: {new_score_old}')\n\
+    model_new_score['on_old_data'] = float(new_score_old)\n\n# Evaluate on new distribution\n\
+    new_score_new = accuracy_score(y_test_new, randomized_search.predict(X_test_new))\n\
+    print(f'New model evaluated on new distribution: {new_score_new}')\nmodel_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n# Save metrics\nwith open('metrics_react.yaml', 'w')\
+    \ as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+  final_metrics:
+    old_distribution: 0.88
+    new_distribution: 0.8
+slow:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import GradientBoostingClassifier\n\
+    from sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionaries\n\
+    model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\nmodel_old_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\ntry:\n    # Load\
+    \ data from specified folder\n    dataset_folder = \"datasets/healthcare\"\n \
+    \   X_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\n    X_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\n    y_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n    y_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n    # Train improved\
+    \ model on old data only\n    model_old = GradientBoostingClassifier(\n      \
+    \  n_estimators=200,\n        learning_rate=0.05,\n        max_depth=4,\n    \
+    \    subsample=0.8,\n        random_state=42\n    )\n    model_old.fit(X_train_old,\
+    \ y_train_old)\n\n    # Evaluate improved model on old test set (ONLY test data)\n\
+    \    old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))\n\
+    \    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')\n\
+    \    model_old_score['on_old_data'] = float(old_score_old)\n\n    # Load new data\n\
+    \    X_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\n    X_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\n    y_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\n    y_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n    # Evaluate improved\
+    \ model on new test set (ONLY test data)\n    old_score_new = accuracy_score(y_test_new,\
+    \ model_old.predict(X_test_new))\n    print(f'Old model evaluated on the new distribution:\
+    \ {old_score_new}')\n    model_old_score['on_new_data'] = float(old_score_new)\n\
+    \n    # Save old model metrics\n    with open('old_metrics.yaml', 'w') as f:\n\
+    \        yaml.dump({'model_old_score': model_old_score}, f)\n\n    print(\"\\\
+    nTraining new model on combined data...\")\n\n    # Combine training datasets\
+    \ for retraining\n    X_train = pd.concat([X_train_old, X_train_new])\n    y_train\
+    \ = pd.concat([y_train_old, y_train_new])\n\n    # Create and train new model\
+    \ with improved configuration\n    model_new = GradientBoostingClassifier(\n \
+    \       n_estimators=200,\n        learning_rate=0.05,\n        max_depth=4,\n\
+    \        subsample=0.8,\n        random_state=42\n    )\n    model_new.fit(X_train,\
+    \ y_train)\n\n    # Evaluate new model on old test set (ONLY test data)\n    new_score_old\
+    \ = accuracy_score(y_test_old, model_new.predict(X_test_old))\n    print(f'New\
+    \ model trained and evaluated on old distribution: {new_score_old}')\n    model_new_score['on_old_data']\
+    \ = float(new_score_old)\n\n    # Evaluate new model on new test set (ONLY test\
+    \ data)\n    new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))\n\
+    \    print(f'New model evaluated on new distribution: {new_score_new}')\n    model_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n    # Save new model metrics\n    with open('fast_graph_metrics.yaml',\
+    \ 'w') as f:\n        yaml.dump({'model_new_score': model_new_score}, f)\n\nexcept\
+    \ FileNotFoundError as e:\n    print(f\"Required data file not found: {str(e)}\"\
+    )\n    print(\"Ensure all train/test files for old and new data exist.\")\nexcept\
+    \ Exception as e:\n    print(f\"Error during model training/evaluation: {str(e)}\"\
+    )"
+  final_metrics:
+    old_distribution: 0.8933333333333333
+    new_distribution: 0.8333333333333334
+improver:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import GradientBoostingClassifier\n\
+    from sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionaries\n\
+    model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\nmodel_old_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\ntry:\n    # Load\
+    \ data from specified folder\n    dataset_folder = \"datasets/healthcare\"\n \
+    \   X_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\n    X_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\n    y_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n    y_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n    # Train improved\
+    \ model on old data only\n    model_old = GradientBoostingClassifier(\n      \
+    \  n_estimators=200,\n        learning_rate=0.05,\n        max_depth=4,\n    \
+    \    subsample=0.8,\n        random_state=42\n    )\n    model_old.fit(X_train_old,\
+    \ y_train_old)\n\n    # Evaluate improved model on old test set (ONLY test data)\n\
+    \    old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))\n\
+    \    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')\n\
+    \    model_old_score['on_old_data'] = float(old_score_old)\n\n    # Load new data\n\
+    \    X_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\n    X_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\n    y_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\n    y_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n    # Evaluate improved\
+    \ model on new test set (ONLY test data)\n    old_score_new = accuracy_score(y_test_new,\
+    \ model_old.predict(X_test_new))\n    print(f'Old model evaluated on the new distribution:\
+    \ {old_score_new}')\n    model_old_score['on_new_data'] = float(old_score_new)\n\
+    \n    # Save old model metrics\n    with open('old_metrics.yaml', 'w') as f:\n\
+    \        yaml.dump({'model_old_score': model_old_score}, f)\n\n    print(\"\\\
+    nTraining new model on combined data...\")\n\n    # Combine training datasets\
+    \ for retraining\n    X_train = pd.concat([X_train_old, X_train_new])\n    y_train\
+    \ = pd.concat([y_train_old, y_train_new])\n\n    # Create and train new model\
+    \ with improved configuration\n    model_new = GradientBoostingClassifier(\n \
+    \       n_estimators=200,\n        learning_rate=0.05,\n        max_depth=4,\n\
+    \        subsample=0.8,\n        random_state=42\n    )\n    model_new.fit(X_train,\
+    \ y_train)\n\n    # Evaluate new model on old test set (ONLY test data)\n    new_score_old\
+    \ = accuracy_score(y_test_old, model_new.predict(X_test_old))\n    print(f'New\
+    \ model trained and evaluated on old distribution: {new_score_old}')\n    model_new_score['on_old_data']\
+    \ = float(new_score_old)\n\n    # Evaluate new model on new test set (ONLY test\
+    \ data)\n    new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))\n\
+    \    print(f'New model evaluated on new distribution: {new_score_new}')\n    model_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n    # Save new model metrics\n    with open('fast_graph_metrics.yaml',\
+    \ 'w') as f:\n        yaml.dump({'model_new_score': model_new_score}, f)\n\nexcept\
+    \ FileNotFoundError as e:\n    print(f\"Required data file not found: {str(e)}\"\
+    )\n    print(\"Ensure all train/test files for old and new data exist.\")\nexcept\
+    \ Exception as e:\n    print(f\"Error during model training/evaluation: {str(e)}\"\
+    )"
+  final_metrics:
+    old_distribution: 0.8933333333333333
+    new_distribution: 0.8333333333333334
+standard:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import GradientBoostingClassifier\n\
+    from sklearn.metrics import accuracy_score\n\n\n# Initialize metrics dictionary\n\
+    model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n\n\
+    # Load data from specified folder\ndataset_folder = \"datasets/healthcare\"\n\
+    X_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old =\
+    \ pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n\n# Load new data\n\
+    X_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\ny_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\n\
+    X_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n\n# Train new model\
+    \ on combined data\nX_train = pd.concat([X_train_old, X_train_new])\ny_train =\
+    \ pd.concat([y_train_old, y_train_new])\n\n\n# Try GradientBoosting for better\
+    \ handling of mixed feature types (numerical, categorical)\nmodel_new = GradientBoostingClassifier(\n\
+    \    n_estimators=250,\n    learning_rate=0.1,\n    max_depth=5,\n    subsample=0.8,\n\
+    \    random_state=42\n)\n\n\n# Handle categorical features (Smoking Status, Diet\
+    \ Quality, Education Level, Family History)\n# by one-hot encoding them\ncategorical_cols\
+    \ = ['Smoking Status', 'Diet Quality', 'Education Level', 'Family History']\n\
+    X_train = pd.get_dummies(X_train, columns=categorical_cols)\nX_test_old = pd.get_dummies(X_test_old,\
+    \ columns=categorical_cols)\nX_test_new = pd.get_dummies(X_test_new, columns=categorical_cols)\n\
+    \n\nmodel_new.fit(X_train, y_train)\n\n\n# Evaluate new model on old test set\n\
+    new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))\nprint(f'New\
+    \ model trained and evaluated on old distribution: {new_score_old}')\nmodel_new_score['on_old_data']\
+    \ = float(new_score_old)\n\n\n# Evaluate new model on new test set\nnew_score_new\
+    \ = accuracy_score(y_test_new, model_new.predict(X_test_new))\nprint(f'New model\
+    \ evaluated on new distribution: {new_score_new}')\nmodel_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n\n# Save metrics\nwith open('metrics_baseline.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+  final_metrics:
+    old_distribution: 0.86
+    new_distribution: 0.7333333333333333
+tot:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.model_selection import\
+    \ train_test_split\nfrom sklearn.ensemble import GradientBoostingClassifier\n\
+    from sklearn.metrics import accuracy_score\nfrom sklearn.preprocessing import\
+    \ OneHotEncoder\nfrom sklearn.compose import ColumnTransformer\n\n# Initialize\
+    \ metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data':\
+    \ 0.0\n}\n\n# Load data from specified folder\ndataset_folder = \"datasets/healthcare\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# Load new data\nX_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\ny_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\nX_test_new = pd.read_csv(f\"\
+    {dataset_folder}/X_test_new.csv\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n# Define numerical and categorical features\nnumerical_features\
+    \ = ['Age', 'BMI', 'Blood Pressure', 'Cholesterol', 'Physical Activity', 'Income']\n\
+    categorical_features = ['Smoking Status', 'Diet Quality', 'Family History', 'Education\
+    \ Level']\n\n# Create column transformer\npreprocessor = ColumnTransformer(\n\
+    \    transformers=[\n        ('num', 'passthrough', numerical_features),\n   \
+    \     ('cat', OneHotEncoder(), categorical_features)\n    ]\n)\n\n# Combine data\n\
+    X_train = pd.concat([X_train_old, X_train_new])\ny_train = pd.concat([y_train_old,\
+    \ y_train_new])\n\n# Transform data\nX_train_transformed = preprocessor.fit_transform(X_train)\n\
+    X_test_old_transformed = preprocessor.transform(X_test_old)\nX_test_new_transformed\
+    \ = preprocessor.transform(X_test_new)\n\n# Define model\nmodel_new = GradientBoostingClassifier(\n\
+    \    n_estimators=100,\n    learning_rate=0.01,\n    max_depth=5,\n    random_state=42\n\
+    )\n\n# Train model\nmodel_new.fit(X_train_transformed, y_train)\n\n# Evaluate\
+    \ on old test set\nold_score = accuracy_score(y_test_old, model_new.predict(X_test_old_transformed))\n\
+    print(f'New model trained and evaluated on old distribution: {old_score}')\nmodel_new_score['on_old_data']\
+    \ = float(old_score)\n\n# Evaluate on new test set\nnew_score = accuracy_score(y_test_new,\
+    \ model_new.predict(X_test_new_transformed))\nprint(f'New model evaluated on new\
+    \ distribution: {new_score}')\nmodel_new_score['on_new_data'] = float(new_score)\n\
+    \n# Save metrics\nwith open('metrics_tot.yaml', 'w') as f:\n    yaml.dump({'model_new_score':\
+    \ model_new_score}, f)\n"
+  final_metrics:
+    old_distribution: 0.84
+    new_distribution: 0.8
+plan_execute:
+  final_code: "import yaml\nimport pandas as pd\nfrom sklearn.model_selection import\
+    \ train_test_split\nfrom sklearn.preprocessing import LabelEncoder\nfrom sklearn.ensemble\
+    \ import GradientBoostingClassifier\nfrom sklearn.metrics import accuracy_score\n\
+    from sklearn.model_selection import GridSearchCV\nfrom sklearn.model_selection\
+    \ import RandomizedSearchCV\nfrom scipy.stats import randint\n\n# Initialize metrics\
+    \ dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data':\
+    \ 0.0\n}\n\n# Define categorical features to apply Label Encoding\ncategorical_features\
+    \ = [\"Smoking Status\", \"Diet Quality\", \"Family History\", \"Education Level\"\
+    ]\n\n# Load data from specified folder\ndataset_folder = \"datasets/healthcare\"\
+    \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# Load new data\nX_train_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\ny_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\nX_test_new = pd.read_csv(f\"\
+    {dataset_folder}/X_test_new.csv\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n# Apply Label Encoding to categorical features\nle =\
+    \ LabelEncoder()\nX_train_old[categorical_features] = X_train_old[categorical_features].apply(lambda\
+    \ series: series.astype(\"str\").apply(le.fit_transform))\nX_test_old[categorical_features]\
+    \ = X_test_old[categorical_features].apply(lambda series: series.astype(\"str\"\
+    ).apply(le.fit_transform))\nX_train_new[categorical_features] = X_train_new[categorical_features].apply(lambda\
+    \ series: series.astype(\"str\").apply(le.fit_transform))\nX_test_new[categorical_features]\
+    \ = X_test_new[categorical_features].apply(lambda series: series.astype(\"str\"\
+    ).apply(le.fit_transform))\n\n# Define hyperparameter search space\nparam_grid\
+    \ = {\n    'learning_rate': [0.01, 0.1, 0.5, 1],\n    'n_estimators': [50, 100,\
+    \ 200, 300],\n    'max_depth': [3, 5, 7, 9],\n    'subsample': [0.5, 0.7, 0.9,\
+    \ 1]\n}\n\n# Perform Randomized Search CV to find optimal hyperparameters\ngrid_search\
+    \ = RandomizedSearchCV(estimator=GradientBoostingClassifier(random_state=42),\
+    \ param_distributions=param_grid, cv=5, n_iter=10)\ngrid_search.fit(pd.concat([X_train_old,\
+    \ X_train_new]), pd.concat([y_train_old, y_train_new]))\n\n# Get the best hyperparameters\n\
+    best_params = grid_search.best_params_\n\n# Train GradientBoostingClassifier with\
+    \ optimal hyperparameters\nmodel_new = GradientBoostingClassifier(**best_params,\
+    \ random_state=42)\nmodel_new.fit(pd.concat([X_train_old, X_train_new]), pd.concat([y_train_old,\
+    \ y_train_new]))\n\n# Evaluate model on old test set\nold_score = accuracy_score(y_test_old,\
+    \ model_new.predict(pd.concat([X_test_old, X_test_new])))\nprint(f'New model evaluated\
+    \ on old distribution: {old_score}')\nmodel_new_score['on_old_data'] = float(old_score)\n\
+    \n# Evaluate model on new test set\nnew_score = accuracy_score(y_test_new, model_new.predict(pd.concat([X_test_old,\
+    \ X_test_new])))\nprint(f'New model evaluated on new distribution: {new_score}')\n\
+    model_new_score['on_new_data'] = float(new_score)\n\n# Save metrics\nwith open('metrics_plan_execute.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+  final_metrics:
+    old_distribution: 0.86
+    new_distribution: 0.7333333333333333

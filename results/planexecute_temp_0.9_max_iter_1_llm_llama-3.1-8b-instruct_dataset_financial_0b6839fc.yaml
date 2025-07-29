@@ -1,0 +1,123 @@
+agent_name: plan_execute
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/financial"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.9133333333333333
+  new_distribution: 0.7166666666666667
+improvement_plan:
+- Load both old and new data from datasets/financial
+- Implement StandardScaler for preprocessing numerical features, considering data
+  ranges for Income and Interest Rate
+- Apply one-hot encoding for Home Ownership and Marital Status, and LabelEncoder for
+  Dependent
+- Train a GradientBoostingClassifier on combined old and new data with feature balancing
+  and class weight
+- Evaluate model on both old and new test sets
+- Save metrics using the model_new_score key format
+improvement_path: []
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.preprocessing import StandardScaler\n\
+  from sklearn.compose import ColumnTransformer\nfrom sklearn.pipeline import Pipeline\n\
+  from sklearn.impute import SimpleImputer\nfrom sklearn.preprocessing import OneHotEncoder\n\
+  from sklearn.preprocessing import LabelEncoder\nfrom imblearn.over_sampling import\
+  \ SMOTE\nfrom sklearn.metrics import accuracy_score\nfrom sklearn.ensemble import\
+  \ GradientBoostingClassifier\nimport numpy as np\n\n# Initialize metrics dictionary\n\
+  model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\n# Load\
+  \ data from specified folder\ndataset_folder = \"datasets/financial\"\nX_train_old\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+  {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+  ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+  ).squeeze(\"columns\")\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\"\
+  )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_test_new =\
+  \ pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Define\
+  \ preprocessing pipeline\nnumerical_features = ['Age', 'Income', 'Credit Score',\
+  \ 'Loan Amount', 'Loan Term', 'Interest Rate', 'Employment Length']\ncategorical_features\
+  \ = ['Home Ownership', 'Marital Status', 'Dependents']\n\nnum_transformer = Pipeline([\n\
+  \    ('imputer', SimpleImputer(strategy='median')),\n    ('scaler', StandardScaler(with_mean=False))\n\
+  ])\n\ncat_transformer = Pipeline([\n    ('imputer', SimpleImputer(strategy='constant',\
+  \ fill_value='missing')),\n    ('onehot', OneHotEncoder(handle_unknown='ignore'))\n\
+  ])\n\n# Scale Income and Interest Rate\nIncome_scaler = StandardScaler()\nInterest_Rate_scaler\
+  \ = StandardScaler(with_mean=False)\n\nX_train_old[['Income']] = Income_scaler.fit_transform(X_train_old[['Income']])\n\
+  X_train_old[['Interest Rate']] = Interest_Rate_scaler.fit_transform(X_train_old[['Interest\
+  \ Rate']])\nX_test_old[['Income']] = Income_scaler.transform(X_test_old[['Income']])\n\
+  X_test_old[['Interest Rate']] = Interest_Rate_scaler.transform(X_test_old[['Interest\
+  \ Rate']])\n\nX_train_new[['Income']] = Income_scaler.fit_transform(X_train_new[['Income']])\n\
+  X_train_new[['Interest Rate']] = Interest_Rate_scaler.fit_transform(X_train_new[['Interest\
+  \ Rate']])\n\n# One-hot encoding for Home Ownership and Marital Status\nX_train_old[['Home\
+  \ Ownership', 'Marital Status']] = pd.get_dummies(X_train_old[['Home Ownership',\
+  \ 'Marital Status']])\nX_test_old[['Home Ownership', 'Marital Status']] = pd.get_dummies(X_test_old[['Home\
+  \ Ownership', 'Marital Status']])\nX_train_new[['Home Ownership', 'Marital Status']]\
+  \ = pd.get_dummies(X_train_new[['Home Ownership', 'Marital Status']])\n\n# Label\
+  \ encoding for Dependents\nle = LabelEncoder()\nX_train_old['Dependents'] = le.fit_transform(X_train_old['Dependents'])\n\
+  X_test_old['Dependents'] = le.fit_transform(X_test_old['Dependents'])\nX_train_new['Dependents']\
+  \ = le.fit_transform(X_train_new['Dependents'])\n\n# Combine old and new data\n\
+  X_train_combined = pd.concat([pd.DataFrame(X_train_old.drop(['Home Ownership', 'Marital\
+  \ Status'], axis=1).values),\n                            pd.DataFrame(X_train_new.drop(['Home\
+  \ Ownership', 'Marital Status'], axis=1).values)])\ny_train_combined = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# Feature balancing and class weight\nX_train_combined = SMOTE().fit_resample(X_train_combined,\
+  \ y_train_combined)\n\n# Apply one-hot encoding for Home Ownership and Marital Status\
+  \ to X_train_combined\nX_train_combined = pd.get_dummies(X_train_combined, columns=['Home\
+  \ Ownership', 'Marital Status'])\n\n# Train GradientBoostingClassifier on combined\
+  \ data\nmodel_new = GradientBoostingClassifier(\n    n_estimators=150,\n    learning_rate=0.1,\n\
+  \    max_depth=5,\n    subsample=0.8,\n    random_state=42\n)\n\nmodel_new.fit(X_train_combined,\
+  \ y_train_combined)\n\n# Evaluate model on old test set\nold_score = accuracy_score(y_test_old,\
+  \ model_new.predict(Pipeline([\n    ('preprocessor', ColumnTransformer(\n      \
+  \  transformers=[\n            ('num', num_transformer, numerical_features),\n \
+  \           ('cat', cat_transformer, categorical_features)\n        ]\n    ))\n\
+  ]).fit_transform(X_test_old.drop(['Home Ownership', 'Marital Status'], axis=1))))\n\
+  \nprint(f'New model evaluated on old distribution: {old_score}')\nmodel_new_score['on_old_data']\
+  \ = float(old_score)\n\n# Evaluate model on new test set\nnew_score = accuracy_score(y_test_new,\
+  \ model_new.predict(Pipeline([\n    ('preprocessor', ColumnTransformer(\n      \
+  \  transformers=[\n            ('num', num_transformer, numerical_features),\n \
+  \           ('cat', cat_transformer, categorical_features)\n        ]\n    ))\n\
+  ]).fit_transform(X_test_new.drop(['Home Ownership', 'Marital Status'], axis=1))))\n\
+  \nprint(f'New model evaluated on new distribution: {new_score}')\nmodel_new_score['on_new_data']\
+  \ = float(new_score)\n\n# Save metrics\nwith open('metrics_plan_execute.yaml', 'w')\
+  \ as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+final_metrics:
+  old_distribution: 0.9133333333333333
+  new_distribution: 0.7166666666666667
+runtime_statistics:
+  total_time_seconds: 66.40860724449158
+  iterations: 0
+  tokens_used: 14444
+  prompt_tokens: 9828
+  completion_tokens: 4616
+  iteration_times: []
+  evaluation_timestamp: '2025-07-18T02:22:35.330670Z'
+  execution_attempts: 3
+  successful_executions: 0
+  failed_executions: 3

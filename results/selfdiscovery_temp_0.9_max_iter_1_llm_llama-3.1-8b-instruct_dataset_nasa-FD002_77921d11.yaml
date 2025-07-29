@@ -1,0 +1,462 @@
+agent_name: self_discovery
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/nasa-FD002"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.72125
+  new_distribution: 0.265
+improvement_path:
+- iteration: 1
+  code: "dataset_folder = \"datasets/healthcare\"\nfrom sklearn.ensemble import GradientBoostingClassifier,\
+    \ RandomForestClassifier\nimport pandas as pd\nimport numpy as np\nimport yaml\n\
+    from sklearn.preprocessing import StandardScaler\nfrom sklearn.ensemble import\
+    \ RandomForestClassifier, GradientBoostingClassifier\nfrom sklearn.metrics import\
+    \ accuracy_score\n\n# Initialize metrics\nmodel_new_score = {\n    'on_old_data':\
+    \ 0.0,\n    'on_new_data': 0.0\n}\n\n# Load data - USE THESE EXACT PATHS\ndataset_folder\
+    \ = \"datasets/financial\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+    )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n\
+    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+    )\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Combine datasets\n\
+    X_train_combined = pd.concat([X_train_old, X_train_new])\ny_train_combined = pd.concat([y_train_old,\
+    \ y_train_new])\n\n# [YOUR PREPROCESSING CODE HERE]\n# Scaler for settings\nscaler\
+    \ = StandardScaler()\nX_train_combined[['Setting_1', 'Setting_2', 'Setting_3',\
+    \ 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']] = scaler.fit_transform(X_train_combined[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']])\n\
+    \nX_test_old[['Setting_1', 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5',\
+    \ 'Setting_6', 'Setting_7']] = scaler.transform(X_test_old[['Setting_1', 'Setting_2',\
+    \ 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']])\nX_test_new[['Setting_1',\
+    \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']]\
+    \ = scaler.transform(X_test_new[['Setting_1', 'Setting_2', 'Setting_3', 'Setting_4',\
+    \ 'Setting_5', 'Setting_6', 'Setting_7']])\n\n# Train model\n#model = GradientBoostingClassifier(random_state=42)\n\
+    model = RandomForestClassifier(n_estimators=100, random_state=42)\nmodel.fit(X_train_combined,\
+    \ y_train_combined)\n\n# Evaluate on old distribution\nold_score = accuracy_score(y_test_old,\
+    \ model.predict(X_test_old))\nprint(f'Model evaluated on old distribution: {old_score}')\n\
+    model_new_score['on_old_data'] = float(old_score)\n\n# Evaluate on new distribution\n\
+    new_score = accuracy_score(y_test_new, model.predict(X_test_new))\nprint(f'Model\
+    \ evaluated on new distribution: {new_score}')\nmodel_new_score['on_new_data']\
+    \ = float(new_score)\n\n# Save metrics\nwith open('metrics_self_discovery.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  metrics:
+    old_distribution: 0.72125
+    new_distribution: 0.265
+  changes:
+  - USE THESE EXACT PATHS
+  reflection: 'Selected Modules:
+
+    1. How could I simplify the problem so that it is easier to solve?
+
+    2. What are the key techniques for improving an ML model on distribution shifts?
+
+    3. How can I implement a robust solution that works with the given datasets?
+
+
+    Adapted Plan:
+
+    **Adapted Solution**
+
+
+    **Simplifying the Problem**
+
+
+    To simplify the problem, we''ll focus on the following:
+
+
+    *   **Scaling and Normalization**: Since all features are numerical, we''ll apply
+    standard scaling to reduce the effect of feature magnitude and improve model stability.
+
+    *   **Handling Missing Values**: We''ll use imputation techniques to replace missing
+    values, as our dataset is relatively small and has no categorical features.
+
+    *   **Feature Engineering**: We''ll avoid over-engineering our features but instead
+    rely on the provided 7 numerical features.
+
+
+    **Improving on Distribution Shifts**
+
+
+    To address distribution shifts, we''ll:
+
+
+    *   **Monitor Data Distribution**: Regularly inspect the distribution of the training
+    and testing datasets to identify any significant changes.
+
+    *   **Ensemble Methods**: Combine multiple models (Random Forest and Gradient
+    Boosting) to reduce the impact of distribution shifts.
+
+    *   **Continual Learning**: Regularly update our models with new data to adapt
+    to changing distributions.
+
+
+    **Robust Solution Implementation**
+
+
+    We''ll implement the following to ensure a robust solution:
+
+
+    *   **Data Splits**: Use stratified splitting to ensure representative subsets
+    of the data.
+
+    *   **Hyperparameter Tuning**: Utilize Grid Search to optimize hyperparameters
+    for both models.
+
+    *   **Evaluation Metrics**: Monitor model performance using metrics like balanced
+    accuracy, precision, and recall.
+
+
+    **Combining Old and New Data**
+
+
+    To effectively combine old and new data, we''ll:
+
+
+    *   **Weighted Averaging**: Use weighted averaging to combine predictions from
+    old and new models.
+
+    *   **Ensemble Methods**: Utilize ensemble methods, like stacking, to combine
+    predictions from multiple models.
+
+
+    **Practical Evaluation Metrics**
+
+
+    We''ll focus on the following evaluation metrics to assess our model''s performance:
+
+
+    *   **Balanced Accuracy**: Evaluate the model''s ability to accurately classify
+    instances from both classes.
+
+    *   **Precision and Recall**: Assess the model''s precision and recall for each
+    class.
+
+    *   **F1 Score**: Calculate the F1 score for each class to provide a balanced
+    measure of precision and recall.
+
+
+    By following these adapted modules, we can create a practical ML solution that
+    addresses the challenges of distribution shifts and provides a robust performance
+    on the given datasets.
+
+
+    Structure:
+
+    **Adapted Solution Implementation Plan**
+
+    ======================================
+
+
+    **1. Data Loading and Preparation**
+
+    ---------------------------------
+
+
+    ### Step 1.1: Load and combine old and new data
+
+
+    ```python
+
+    from sklearn.model_selection import train_test_split
+
+
+    # Load old data
+
+    old_data = pd.read_csv(''old_data.csv'')
+
+    new_data = pd.read_csv(''new_data.csv'')
+
+
+    # Combine old and new data
+
+    combined_data = pd.concat([old_data, new_data])
+
+    ```
+
+
+    ### Step 1.2: Scale and normalize features
+
+
+    ```python
+
+    from sklearn.preprocessing import StandardScaler
+
+
+    scaler = StandardScaler()
+
+    combined_data[[''Setting_1'', ''Setting_2'', ''Setting_3'', ''Setting_4'', ''Setting_5'',
+    ''Setting_6'', ''Setting_7'']] = scaler.fit_transform(combined_data[[''Setting_1'',
+    ''Setting_2'', ''Setting_3'', ''Setting_4'', ''Setting_5'', ''Setting_6'', ''Setting_7'']])
+
+    ```
+
+
+    ### Step 1.3: Impute missing values
+
+
+    ```python
+
+    from sklearn.impute import SimpleImputer
+
+
+    imputer = SimpleImputer(strategy=''mean'')
+
+    combined_data[[''Setting_1'', ''Setting_2'', ''Setting_3'', ''Setting_4'', ''Setting_5'',
+    ''Setting_6'', ''Setting_7'']] = imputer.fit_transform(combined_data[[''Setting_1'',
+    ''Setting_2'', ''Setting_3'', ''Setting_4'', ''Setting_5'', ''Setting_6'', ''Setting_7'']])
+
+    ```
+
+
+    **2. Baseline Model Implementation**
+
+    -----------------------------------
+
+
+    ### Step 2.1: Split data into training and testing sets
+
+
+    ```python
+
+    X = combined_data.drop(''target'', axis=1)
+
+    y = combined_data[''target'']
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42,
+    stratify=y)
+
+    ```
+
+
+    ### Step 2.2: Implement baseline model
+
+
+    ```python
+
+    from sklearn.linear_model import LogisticRegression
+
+
+    baseline_model = LogisticRegression()
+
+    baseline_model.fit(X_train, y_train)
+
+    ```
+
+
+    **3. Improved Model Implementation**
+
+    ----------------------------------
+
+
+    ### Step 3.1: Implement ensemble method (Random Forest)
+
+
+    ```python
+
+    from sklearn.ensemble import RandomForestClassifier
+
+
+    rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+    rf_model.fit(X_train, y_train)
+
+    ```
+
+
+    ### Step 3.2: Implement ensemble method (Gradient Boosting)
+
+
+    ```python
+
+    from sklearn.ensemble import GradientBoostingClassifier
+
+
+    gb_model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, random_state=42)
+
+    gb_model.fit(X_train, y_train)
+
+    ```
+
+
+    ### Step 3.3: Implement weighted averaging
+
+
+    ```python
+
+    from sklearn.ensemble import BaggingClassifier
+
+
+    bagging_model = BaggingClassifier(base_estimator=baseline_model, n_estimators=10,
+    random_state=42)
+
+    bagging_model.fit(X_train, y_train)
+
+    ```
+
+
+    **4. Evaluation and Metrics**
+
+    ---------------------------
+
+
+    ### 4.1: Evaluate baseline model
+
+
+    ```python
+
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+
+    y_pred_baseline = baseline_model.predict(X_test)
+
+    print(''Baseline Model Metrics:'')
+
+    print(''Accuracy:'', accuracy_score(y_test, y_pred_baseline))
+
+    print(''Precision:'', precision_score(y_test, y_pred_baseline))
+
+    print(''Recall:'', recall_score(y_test, y_pred_baseline))
+
+    print(''F1 Score:'', f1_score(y_test, y_pred_baseline))
+
+    ```
+
+
+    ### 4.2: Evaluate improved models
+
+
+    ```python
+
+    y_pred_rf = rf_model.predict(X_test)
+
+    y_pred_gb = gb_model.predict(X_test)
+
+    y_pred_bagging = bagging_model.predict(X_test)
+
+
+    print(''Improved Model Metrics:'')
+
+    print(''Random Forest Accuracy:'', accuracy_score(y_test, y_pred_rf))
+
+    print(''Gradient Boosting Accuracy:'', accuracy_score(y_test, y_pred_gb))
+
+    print(''Bagging Accuracy:'', accuracy_score(y_test, y_pred_bagging))
+
+    print(''Random Forest Precision:'', precision_score(y_test, y_pred_rf))
+
+    print(''Gradient Boosting Precision:'', precision_score(y_test, y_pred_gb))
+
+    print(''Bagging Precision:'', precision_score(y_test, y_pred_bagging))
+
+    print(''Random Forest Recall:'', recall_score(y_test, y_pred_rf))
+
+    print(''Gradient Boosting Recall:'', recall_score(y_test, y_pred_gb))
+
+    print(''Bagging Recall:'', recall_score(y_test, y_pred_bagging))
+
+    print(''Random Forest F1 Score:'', f1_score(y_test, y_pred_rf))
+
+    print(''Gradient Boosting F1 Score:'', f1_score(y_test, y_pred_gb))
+
+    print(''Bagging F1 Score:'', f1_score(y_test, y_pred_bagging))
+
+    ```
+
+
+    ### 4.3: Combine weights and evaluate
+
+
+    ```python
+
+    weighted_avg_pred = (0.4 * y_pred_baseline + 0.3 * y_pred_rf + 0.3 * y_pred_gb)
+
+    weighted_avg_pred = np.argmax(weighted_avg_pred, axis=1)
+
+
+    print(''Weighted Averaging Accuracy:'', accuracy_score(y_test, weighted_avg_pred))
+
+    ```
+
+
+    This plan focuses on loading and preprocessing data, implementing a baseline model,
+    an improved model using ensemble methods, and evaluating both models using various
+    metrics. The weighted averaging method is used to combine predictions from multiple
+    models.'
+  execution_time: 0
+final_code: "dataset_folder = \"datasets/healthcare\"\nfrom sklearn.ensemble import\
+  \ GradientBoostingClassifier, RandomForestClassifier\nimport pandas as pd\nimport\
+  \ numpy as np\nimport yaml\nfrom sklearn.preprocessing import StandardScaler\nfrom\
+  \ sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier\nfrom\
+  \ sklearn.metrics import accuracy_score\n\n# Initialize metrics\nmodel_new_score\
+  \ = {\n    'on_old_data': 0.0,\n    'on_new_data': 0.0\n}\n\n# Load data - USE THESE\
+  \ EXACT PATHS\ndataset_folder = \"datasets/financial\"\nX_train_old = pd.read_csv(f\"\
+  {dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\"\
+  )\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\"\
+  )\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+  )\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new\
+  \ = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"\
+  {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"\
+  {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# Combine datasets\n\
+  X_train_combined = pd.concat([X_train_old, X_train_new])\ny_train_combined = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# [YOUR PREPROCESSING CODE HERE]\n# Scaler for settings\nscaler\
+  \ = StandardScaler()\nX_train_combined[['Setting_1', 'Setting_2', 'Setting_3', 'Setting_4',\
+  \ 'Setting_5', 'Setting_6', 'Setting_7']] = scaler.fit_transform(X_train_combined[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']])\n\
+  \nX_test_old[['Setting_1', 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6',\
+  \ 'Setting_7']] = scaler.transform(X_test_old[['Setting_1', 'Setting_2', 'Setting_3',\
+  \ 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']])\nX_test_new[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'Setting_4', 'Setting_5', 'Setting_6', 'Setting_7']]\
+  \ = scaler.transform(X_test_new[['Setting_1', 'Setting_2', 'Setting_3', 'Setting_4',\
+  \ 'Setting_5', 'Setting_6', 'Setting_7']])\n\n# Train model\n#model = GradientBoostingClassifier(random_state=42)\n\
+  model = RandomForestClassifier(n_estimators=100, random_state=42)\nmodel.fit(X_train_combined,\
+  \ y_train_combined)\n\n# Evaluate on old distribution\nold_score = accuracy_score(y_test_old,\
+  \ model.predict(X_test_old))\nprint(f'Model evaluated on old distribution: {old_score}')\n\
+  model_new_score['on_old_data'] = float(old_score)\n\n# Evaluate on new distribution\n\
+  new_score = accuracy_score(y_test_new, model.predict(X_test_new))\nprint(f'Model\
+  \ evaluated on new distribution: {new_score}')\nmodel_new_score['on_new_data'] =\
+  \ float(new_score)\n\n# Save metrics\nwith open('metrics_self_discovery.yaml', 'w')\
+  \ as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+final_metrics:
+  old_distribution: 0.72125
+  new_distribution: 0.265
+runtime_statistics:
+  total_time_seconds: 28.277790069580078
+  iterations: 1
+  tokens_used: 4268
+  prompt_tokens: 1890
+  completion_tokens: 2378
+  iteration_times: []
+  evaluation_timestamp: '2025-07-19T03:04:24.390800Z'

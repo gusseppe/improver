@@ -1,0 +1,154 @@
+agent_name: improver
+initial_code: ''
+initial_metrics:
+  old_distribution: 0.72125
+  new_distribution: 0.265
+improvement_path:
+- iteration: 1
+  code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    from sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionaries\n\
+    model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\nmodel_old_score\
+    \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\ntry:\n    # Load\
+    \ data from specified folder\n    dataset_folder = \"datasets/nasa-FD002\"\n \
+    \   X_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\n    X_test_old\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\n    y_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n    y_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n    X_train_new = pd.read_csv(f\"\
+    {dataset_folder}/X_train_new.csv\")\n    X_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\"\
+    )\n    y_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"\
+    columns\")\n    y_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+    ).squeeze(\"columns\")\n\n    # print data shapes\n    print(f\"Old X_train shape:\
+    \ {X_train_old.shape}\")\n    print(f\"Old X_test shape: {X_test_old.shape}\"\
+    )\n    print(f\"Old y_train shape: {y_train_old.shape}\")\n    print(f\"Old y_test\
+    \ shape: {y_test_old.shape}\")\n    print(f\"New X_train shape: {X_train_new.shape}\"\
+    )\n    print(f\"New X_test shape: {X_test_new.shape}\")\n    print(f\"New y_train\
+    \ shape: {y_train_new.shape}\")\n    print(f\"New y_test shape: {y_test_new.shape}\"\
+    )\n\n    # Train and evaluate old model\n    model_old = RandomForestClassifier(random_state=42)\n\
+    \    model_old.fit(X_train_old, y_train_old)\n\n    # Test old model on old test\
+    \ set\n    old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))\n\
+    \    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')\n\
+    \    model_old_score['on_old_data'] = float(old_score_old)\n\n    # Test old model\
+    \ on new test set\n    old_score_new = accuracy_score(y_test_new, model_old.predict(X_test_new))\n\
+    \    print(f'Old model evaluated on the new distribution: {old_score_new}')\n\
+    \    model_old_score['on_new_data'] = float(old_score_new)\n\n    # Save old model\
+    \ metrics\n    with open('old_metrics.yaml', 'w') as f:\n        yaml.dump({'model_old_score':\
+    \ model_old_score}, f)\n\n    print(\"\\nTraining new model on combined data...\"\
+    )\n\n    # Combine data\n    X_train = pd.concat([X_train_old, X_train_new])\n\
+    \    y_train = pd.concat([y_train_old, y_train_new])\n\n    # print combined data\
+    \ shapes\n    print(f\"Combined X_train shape: {X_train.shape}\")\n    print(f\"\
+    Combined X_test shape: {X_test_new.shape}\")\n    print(f\"Combined y_train shape:\
+    \ {y_train.shape}\")\n    print(f\"Combined y_test shape: {y_test_new.shape}\"\
+    )\n\n    # Train new model on combined dataset\n    model_new = RandomForestClassifier(random_state=42)\n\
+    \    model_new.fit(X_train, y_train)\n\n    # Test new model on old test set\n\
+    \    new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))\n\
+    \    print(f'New model trained and evaluated on old distribution: {new_score_old}')\n\
+    \    model_new_score['on_old_data'] = float(new_score_old)\n\n    # Test new model\
+    \ on new test set\n    new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))\n\
+    \    print(f'New model evaluated on new distribution: {new_score_new}')\n    model_new_score['on_new_data']\
+    \ = float(new_score_new)\n\n    # Save new model metrics\n    with open('fast_graph_metrics.yaml',\
+    \ 'w') as f:\n        yaml.dump({'model_new_score': model_new_score}, f)\n\nexcept\
+    \ FileNotFoundError as e:\n    print(f\"Required data file not found: {str(e)}\"\
+    )\n    print(\"Ensure all train/test files for old and new data exist.\")\nexcept\
+    \ Exception as e:\n    print(f\"Error during model training/evaluation: {str(e)}\"\
+    )"
+  metrics:
+    old_distribution: 0.70375
+    new_distribution: 0.5225
+  changes:
+  - Applied retrained_on_combined_data
+  - 'iteration_count: 0'
+  - Applied used_slow_graph_insights
+  reflection: 'Fast retraining execution output:
+
+    exitcode: 0 (execution succeeded)
+
+    Code output: Old X_train shape: (7200, 7)
+
+    Old X_test shape: (800, 7)
+
+    Old y_train shape: (7200,)
+
+    Old y_test shape: (800,)
+
+    New X_train shape: (7200, 7)
+
+    New X_test shape: (800, 7)
+
+    New y_train shape: (7200,)
+
+    New y_test shape: (800,)
+
+    Old model trained and evaluated on the old distribution: 0.72125
+
+    Old model evaluated on the new distribution: 0.265
+
+
+    Training new model on combined data...
+
+    Combined X_train shape: (14400, 7)
+
+    Combined X_test shape: (800, 7)
+
+    Combined y_train shape: (14400,)
+
+    Combined y_test shape: (800,)
+
+    New model trained and evaluated on old distribution: 0.70375
+
+    New model evaluated on new distribution: 0.5225
+
+    '
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+  from sklearn.metrics import accuracy_score\n\n# Initialize metrics dictionaries\n\
+  model_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\nmodel_old_score\
+  \ = {\n    'on_new_data': 0.0,\n    'on_old_data': 0.0\n}\n\ntry:\n    # Load data\
+  \ from specified folder\n    dataset_folder = \"datasets/nasa-FD002\"\n    X_train_old\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\n    X_test_old = pd.read_csv(f\"\
+  {dataset_folder}/X_test_old.csv\")\n    y_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+  ).squeeze(\"columns\")\n    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+  ).squeeze(\"columns\")\n\n    X_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\n    X_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\n    y_train_new\
+  \ = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\n  \
+  \  y_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\"\
+  )\n\n    # print data shapes\n    print(f\"Old X_train shape: {X_train_old.shape}\"\
+  )\n    print(f\"Old X_test shape: {X_test_old.shape}\")\n    print(f\"Old y_train\
+  \ shape: {y_train_old.shape}\")\n    print(f\"Old y_test shape: {y_test_old.shape}\"\
+  )\n    print(f\"New X_train shape: {X_train_new.shape}\")\n    print(f\"New X_test\
+  \ shape: {X_test_new.shape}\")\n    print(f\"New y_train shape: {y_train_new.shape}\"\
+  )\n    print(f\"New y_test shape: {y_test_new.shape}\")\n\n    # Train and evaluate\
+  \ old model\n    model_old = RandomForestClassifier(random_state=42)\n    model_old.fit(X_train_old,\
+  \ y_train_old)\n\n    # Test old model on old test set\n    old_score_old = accuracy_score(y_test_old,\
+  \ model_old.predict(X_test_old))\n    print(f'Old model trained and evaluated on\
+  \ the old distribution: {old_score_old}')\n    model_old_score['on_old_data'] =\
+  \ float(old_score_old)\n\n    # Test old model on new test set\n    old_score_new\
+  \ = accuracy_score(y_test_new, model_old.predict(X_test_new))\n    print(f'Old model\
+  \ evaluated on the new distribution: {old_score_new}')\n    model_old_score['on_new_data']\
+  \ = float(old_score_new)\n\n    # Save old model metrics\n    with open('old_metrics.yaml',\
+  \ 'w') as f:\n        yaml.dump({'model_old_score': model_old_score}, f)\n\n   \
+  \ print(\"\\nTraining new model on combined data...\")\n\n    # Combine data\n \
+  \   X_train = pd.concat([X_train_old, X_train_new])\n    y_train = pd.concat([y_train_old,\
+  \ y_train_new])\n\n    # print combined data shapes\n    print(f\"Combined X_train\
+  \ shape: {X_train.shape}\")\n    print(f\"Combined X_test shape: {X_test_new.shape}\"\
+  )\n    print(f\"Combined y_train shape: {y_train.shape}\")\n    print(f\"Combined\
+  \ y_test shape: {y_test_new.shape}\")\n\n    # Train new model on combined dataset\n\
+  \    model_new = RandomForestClassifier(random_state=42)\n    model_new.fit(X_train,\
+  \ y_train)\n\n    # Test new model on old test set\n    new_score_old = accuracy_score(y_test_old,\
+  \ model_new.predict(X_test_old))\n    print(f'New model trained and evaluated on\
+  \ old distribution: {new_score_old}')\n    model_new_score['on_old_data'] = float(new_score_old)\n\
+  \n    # Test new model on new test set\n    new_score_new = accuracy_score(y_test_new,\
+  \ model_new.predict(X_test_new))\n    print(f'New model evaluated on new distribution:\
+  \ {new_score_new}')\n    model_new_score['on_new_data'] = float(new_score_new)\n\
+  \n    # Save new model metrics\n    with open('fast_graph_metrics.yaml', 'w') as\
+  \ f:\n        yaml.dump({'model_new_score': model_new_score}, f)\n\nexcept FileNotFoundError\
+  \ as e:\n    print(f\"Required data file not found: {str(e)}\")\n    print(\"Ensure\
+  \ all train/test files for old and new data exist.\")\nexcept Exception as e:\n\
+  \    print(f\"Error during model training/evaluation: {str(e)}\")"
+final_metrics:
+  old_distribution: 0.70375
+  new_distribution: 0.5225
+runtime_statistics:
+  total_time_seconds: 19.018728
+  iterations: 1
+  tokens_used: 915
+  evaluation_timestamp: '2025-07-19T02:12:39.685363Z'
+reverted_to_baseline: null

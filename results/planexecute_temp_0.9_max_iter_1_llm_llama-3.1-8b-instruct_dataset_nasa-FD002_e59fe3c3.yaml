@@ -1,0 +1,109 @@
+agent_name: plan_execute
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/nasa-FD002"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.72125
+  new_distribution: 0.265
+improvement_plan:
+- Apply LabelEncoder for categorical feature 'Maintenance_Status'
+- Re-design the hyperparameter tuning approach to use a stratified approach, taking
+  into account the class imbalance in the 'Maintenance_Status' category
+- Modify the existing train and evaluate a RandomForestClassifier with a stratifiedKFold
+  splitter to ensure robustness in model performance evaluation
+- Train a RandomForestClassifier with optimized hyperparameters on combined old and
+  new data after splitting the dataset into training and testing sets using the stratifiedKFold
+  splitter.
+- Evaluate model on both old and new test sets using the same stratifiedKFold splitter.
+- Save metrics using the model_new_score key format
+- Since the dataset description indicates that the 'Maintenance_Status' is already
+  an integer type, consider revising the strategy for handling categorical features,
+  possibly by converting it to a categorical type or using a more advanced encoding
+  scheme.
+improvement_path: []
+final_code: "import yaml\nimport pandas as pd\nfrom sklearn.preprocessing import LabelEncoder\n\
+  from sklearn.model_selection import StratifiedKFold\nfrom sklearn.ensemble import\
+  \ RandomForestClassifier\nfrom sklearn.metrics import accuracy_score\n\n# Initialize\
+  \ metrics dictionary\nmodel_new_score = {\n    'on_new_data': 0.0,\n    'on_old_data':\
+  \ 0.0\n}\n\n# Load data from specified folder\ndataset_folder = \"datasets/nasa-FD002\"\
+  \nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old =\
+  \ pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+  {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+  {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\nX_train_new = pd.read_csv(f\"\
+  {dataset_folder}/X_train_new.csv\")\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\"\
+  ).squeeze(\"columns\")\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\"\
+  )\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\"\
+  )\n\n# Apply LabelEncoder for categorical feature 'Maintenance_Status'\nle = LabelEncoder()\n\
+  y_train_old = le.fit_transform(y_train_old)\ny_test_old = le.transform(y_test_old)\n\
+  y_train_new = le.fit_transform(y_train_new)\ny_test_new = le.transform(y_test_new)\n\
+  \n# Define stratifiedKFold for splitting data\nskf = StratifiedKFold(n_splits=5,\
+  \ shuffle=True, random_state=42)\n\n# Scale numerical features using MinMaxScaler\n\
+  scaler = MinMaxScaler()\nX_train_old_scaled = scaler.fit_transform(X_train_old[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+  \ 'Burner_fuel_air_ratio']])\nX_test_old_scaled = scaler.transform(X_test_old[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+  \ 'Burner_fuel_air_ratio']])\nX_train_new_scaled = scaler.fit_transform(X_train_new[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+  \ 'Burner_fuel_air_ratio']])\nX_test_new_scaled = scaler.transform(X_test_new[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+  \ 'Burner_fuel_air_ratio']])\n\n# Combine old and new data for training\nX_train_combined\
+  \ = pd.concat([X_train_old_scaled, X_train_new_scaled])\ny_train_combined = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# Split the combined dataset into training and testing sets using\
+  \ stratifiedKFold\nX_train_combined_train, X_train_combined_test, y_train_combined_train,\
+  \ y_train_combined_test = next(skf.split(X_train_combined, y_train_combined))\n\n\
+  # Train a RandomForestClassifier with stratifiedKFold\nmodel = RandomForestClassifier(n_estimators=150,\
+  \ max_depth=5, random_state=42)\nmodel.fit(X_train_combined_train, y_train_combined_train)\n\
+  \n# Evaluate model on old test set\nold_score = accuracy_score(y_test_old, model.predict(scaler.transform(X_test_old[['Setting_1',\
+  \ 'Setting_2', 'Setting_3', 'LPC_outlet_temperature', 'Physical_fan_speed', 'Corrected_core_speed',\
+  \ 'Burner_fuel_air_ratio']])))\nprint(f'New model evaluated on old distribution:\
+  \ {old_score}')\nmodel_new_score['on_old_data'] = float(old_score)\n\n# Evaluate\
+  \ model on new test set\nnew_score = accuracy_score(y_test_new, model.predict(X_test_new_scaled))\n\
+  print(f'New model evaluated on new distribution: {new_score}')\nmodel_new_score['on_new_data']\
+  \ = float(new_score)\n\n# Save metrics\nwith open('metrics_plan_execute.yaml', 'w')\
+  \ as f:\n    yaml.dump({'model_new_score': model_new_score}, f)\n"
+final_metrics:
+  old_distribution: 0.72125
+  new_distribution: 0.265
+runtime_statistics:
+  total_time_seconds: 115.36966466903687
+  iterations: 0
+  tokens_used: 11516
+  prompt_tokens: 7562
+  completion_tokens: 3954
+  iteration_times: []
+  evaluation_timestamp: '2025-07-19T02:05:09.604402Z'
+  execution_attempts: 3
+  successful_executions: 0
+  failed_executions: 3

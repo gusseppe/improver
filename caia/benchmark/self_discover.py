@@ -555,7 +555,7 @@ class SelfDiscoverGraph:
         # Execute the code
         wrapped_code = f"```python\n{fixed_code}\n```"
         
-        executor = LocalCommandLineCodeExecutor(timeout=60)
+        executor = LocalCommandLineCodeExecutor(timeout=120)
         code_executor_agent = ConversableAgent(
             "executor",
             llm_config=False,
