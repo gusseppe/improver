@@ -1,0 +1,105 @@
+agent_name: codeact
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/nasa"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.79
+  new_distribution: 0.372
+improvement_path:
+- iteration: 1
+  code: "import pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    from sklearn.model_selection import train_test_split\nimport yaml\n\n# load the\
+    \ data\ndataset_folder = \"datasets/nasa\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+    )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old\
+    \ = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\n\
+    y_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\"\
+    )\n\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new\
+    \ = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# combine old and new\
+    \ training data\nX_train_combined = pd.concat([X_train_old, X_train_new])\ny_train_combined\
+    \ = pd.concat([y_train_old, y_train_new])\n\n# split combined data into new training\
+    \ and old training sets (for validation)\nX_train_combined, X_val, y_train_combined,\
+    \ y_val = train_test_split(X_train_combined, y_train_combined, test_size=0.2,\
+    \ random_state=42)\n\n# train a new model on combined data\nmodel_new = RandomForestClassifier(random_state=42)\n\
+    model_new.fit(X_train_combined, y_train_combined)\n\n# evaluate on old test set\n\
+    old_accuracy = model_new.score(X_test_old, y_test_old)\nprint(f'Model trained\
+    \ on combined data and evaluated on the old distribution: {old_accuracy}')\n\n\
+    # evaluate on new test set\nnew_accuracy = model_new.score(X_test_new, y_test_new)\n\
+    print(f'Model trained on combined data and evaluated on the new distribution:\
+    \ {new_accuracy}')\n\n# save metrics to file\nmodel_new_score = {'on_new_data':\
+    \ float(new_accuracy), 'on_old_data': float(old_accuracy)}\nwith open('metrics_codeact.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  metrics:
+    old_distribution: 0.796
+    new_distribution: 0.664
+  turns: 2
+  execution_time: 10.885019302368164
+final_code: "import pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+  from sklearn.model_selection import train_test_split\nimport yaml\n\n# load the\
+  \ data\ndataset_folder = \"datasets/nasa\"\nX_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\"\
+  )\nX_test_old = pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old =\
+  \ pd.read_csv(f\"{dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old\
+  \ = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\nX_train_new\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new = pd.read_csv(f\"\
+  {dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"{dataset_folder}/y_train_new.csv\"\
+  ).squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\"\
+  ).squeeze(\"columns\")\n\n# combine old and new training data\nX_train_combined\
+  \ = pd.concat([X_train_old, X_train_new])\ny_train_combined = pd.concat([y_train_old,\
+  \ y_train_new])\n\n# split combined data into new training and old training sets\
+  \ (for validation)\nX_train_combined, X_val, y_train_combined, y_val = train_test_split(X_train_combined,\
+  \ y_train_combined, test_size=0.2, random_state=42)\n\n# train a new model on combined\
+  \ data\nmodel_new = RandomForestClassifier(random_state=42)\nmodel_new.fit(X_train_combined,\
+  \ y_train_combined)\n\n# evaluate on old test set\nold_accuracy = model_new.score(X_test_old,\
+  \ y_test_old)\nprint(f'Model trained on combined data and evaluated on the old distribution:\
+  \ {old_accuracy}')\n\n# evaluate on new test set\nnew_accuracy = model_new.score(X_test_new,\
+  \ y_test_new)\nprint(f'Model trained on combined data and evaluated on the new distribution:\
+  \ {new_accuracy}')\n\n# save metrics to file\nmodel_new_score = {'on_new_data':\
+  \ float(new_accuracy), 'on_old_data': float(old_accuracy)}\nwith open('metrics_codeact.yaml',\
+  \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+final_metrics:
+  old_distribution: 0.796
+  new_distribution: 0.664
+runtime_statistics:
+  total_time_seconds: 10.927134275436401
+  iterations: 1
+  tokens_used: 5040
+  prompt_tokens: 3898
+  completion_tokens: 1142
+  iteration_times:
+  - iteration: 1
+    time: 10.885019302368164
+    turns: 2
+  evaluation_timestamp: '2025-12-03T04:20:40.531052Z'

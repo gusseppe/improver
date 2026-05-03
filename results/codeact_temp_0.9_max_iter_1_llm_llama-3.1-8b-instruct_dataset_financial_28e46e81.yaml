@@ -1,0 +1,99 @@
+agent_name: codeact
+initial_code: '
+
+  import pandas as pd
+
+  from sklearn.ensemble import RandomForestClassifier
+
+
+  # load the old data
+
+  dataset_folder = "datasets/financial"
+
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+
+  # Test the model on the old test set
+
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+
+  print(f''Model trained and evaluated on the old distribution: {old_accuracy}'')
+
+  '
+initial_metrics:
+  old_distribution: 0.9133333333333333
+  new_distribution: 0.7166666666666667
+improvement_path:
+- iteration: 1
+  code: "import pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+    import yaml\n\n# load the old data\ndataset_folder = \"datasets/financial\"\n\
+    X_train_old = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old =\
+    \ pd.read_csv(f\"{dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"\
+    {dataset_folder}/y_train_old.csv\").squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"\
+    {dataset_folder}/y_test_old.csv\").squeeze(\"columns\")\n\n# load the new data\n\
+    X_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\")\nX_test_new =\
+    \ pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new = pd.read_csv(f\"\
+    {dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new = pd.read_csv(f\"\
+    {dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n# combine the old and\
+    \ new training data\nX_train_combined = pd.concat([X_train_old, X_train_new],\
+    \ axis=0)\ny_train_combined = pd.concat([y_train_old, y_train_new], axis=0)\n\n\
+    # train a model on the combined data\nmodel_combined = RandomForestClassifier(random_state=42)\n\
+    model_combined.fit(X_train_combined, y_train_combined)\n\n# test the model on\
+    \ both test sets\nold_accuracy = model_combined.score(X_test_old, y_test_old)\n\
+    new_accuracy = model_combined.score(X_test_new, y_test_new)\n\nprint(f'Model trained,\
+    \ evaluated on the old distribution: {old_accuracy}')\nprint(f'Model trained,\
+    \ evaluated on the new distribution: {new_accuracy}')\n\nmodel_new_score = {'on_new_data':\
+    \ float(new_accuracy), 'on_old_data': float(old_accuracy)}\nwith open('metrics_codeact.yaml',\
+    \ 'w') as f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+  metrics:
+    old_distribution: 0.9066666666666666
+    new_distribution: 0.8
+  turns: 2
+  execution_time: 8.40914273262024
+final_code: "import pandas as pd\nfrom sklearn.ensemble import RandomForestClassifier\n\
+  import yaml\n\n# load the old data\ndataset_folder = \"datasets/financial\"\nX_train_old\
+  \ = pd.read_csv(f\"{dataset_folder}/X_train_old.csv\")\nX_test_old = pd.read_csv(f\"\
+  {dataset_folder}/X_test_old.csv\")\ny_train_old = pd.read_csv(f\"{dataset_folder}/y_train_old.csv\"\
+  ).squeeze(\"columns\")\ny_test_old = pd.read_csv(f\"{dataset_folder}/y_test_old.csv\"\
+  ).squeeze(\"columns\")\n\n# load the new data\nX_train_new = pd.read_csv(f\"{dataset_folder}/X_train_new.csv\"\
+  )\nX_test_new = pd.read_csv(f\"{dataset_folder}/X_test_new.csv\")\ny_train_new =\
+  \ pd.read_csv(f\"{dataset_folder}/y_train_new.csv\").squeeze(\"columns\")\ny_test_new\
+  \ = pd.read_csv(f\"{dataset_folder}/y_test_new.csv\").squeeze(\"columns\")\n\n#\
+  \ combine the old and new training data\nX_train_combined = pd.concat([X_train_old,\
+  \ X_train_new], axis=0)\ny_train_combined = pd.concat([y_train_old, y_train_new],\
+  \ axis=0)\n\n# train a model on the combined data\nmodel_combined = RandomForestClassifier(random_state=42)\n\
+  model_combined.fit(X_train_combined, y_train_combined)\n\n# test the model on both\
+  \ test sets\nold_accuracy = model_combined.score(X_test_old, y_test_old)\nnew_accuracy\
+  \ = model_combined.score(X_test_new, y_test_new)\n\nprint(f'Model trained, evaluated\
+  \ on the old distribution: {old_accuracy}')\nprint(f'Model trained, evaluated on\
+  \ the new distribution: {new_accuracy}')\n\nmodel_new_score = {'on_new_data': float(new_accuracy),\
+  \ 'on_old_data': float(old_accuracy)}\nwith open('metrics_codeact.yaml', 'w') as\
+  \ f:\n    yaml.dump({'model_new_score': model_new_score}, f)"
+final_metrics:
+  old_distribution: 0.9066666666666666
+  new_distribution: 0.8
+runtime_statistics:
+  total_time_seconds: 8.426448106765747
+  iterations: 1
+  tokens_used: 4522
+  prompt_tokens: 3609
+  completion_tokens: 913
+  iteration_times:
+  - iteration: 1
+    time: 8.40914273262024
+    turns: 2
+  evaluation_timestamp: '2025-12-03T04:36:57.221246Z'
