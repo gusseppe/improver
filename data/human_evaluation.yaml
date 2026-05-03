@@ -1,0 +1,188 @@
+# Agent Performance Evaluation Scores
+# Scores are on a scale of 1-10 for Validity, Quality, and Novelty
+
+financial:
+ Standard:
+   validity: 2  # Incorrect scaling (separate fits on old/new data) and broken SMOTE import violates ML practices
+   quality: 3  # Multiple implementation errors including non-existent SMOTEMethod and incorrect preprocessing flow
+   novelty: 6  # Good ML concepts (scaling, SMOTE, class balancing) but poor execution
+ KC-fast:
+   validity: 9  # Excellent evaluation methodology with proper train/test separation and fair assessment on both distributions
+   quality: 8  # Clean, maintainable code that follows ML best practices and would be safe to deploy in production
+   novelty: 3  # Very basic approach with minimal innovation beyond simple dataset concatenation
+ KC-slow:
+   validity: 8  # Mostly correct methodology but creates unused combined test set showing some evaluation logic confusion
+   quality: 7  # Well-structured with good error handling and thoughtful GradientBoosting parameters including early stopping
+   novelty: 7  # Good algorithm choice with well-tuned hyperparameters and robust error handling for production use
+ KC-agent:
+   validity: 10  # Perfect evaluation methodology with clear test-only evaluation and proper data isolation
+   quality: 9  # Excellent implementation with clean code, robust error handling, and production-ready conservative hyperparameters
+   novelty: 6  # Thoughtful hyperparameter tuning (lower learning rate, appropriate depth) showing understanding of bias-variance tradeoffs
+ Plan-Execute:
+   validity: 1  # Critical flaws including inconsistent preprocessing, incorrect scaling fits, and broken evaluation pipeline
+   quality: 1  # Severely broken code with DataFrame operation errors, inconsistent preprocessing, and would crash during execution
+   novelty: 7  # Excellent ML concepts (comprehensive pipelines, SMOTE, proper feature separation) but completely failed implementation
+ Self-Discovery:
+   validity: 2  # Missing OneHotEncoder import, conflicting dataset assignments, and incorrect separate fitting on train data
+   quality: 1  # Multiple critical errors including missing imports, sparse matrix assignment to DataFrame columns
+   novelty: 3  # Basic preprocessing attempt but poorly executed with no sophisticated techniques demonstrated
+ Reflexion:
+   validity: 2  # Creates preprocessing pipeline but bypasses it completely, using raw data with LightGBM causing mismatches
+   quality: 2  # Poor integration between sklearn pipelines and LightGBM native API, with confusion between frameworks
+   novelty: 8  # Advanced techniques (LightGBM, feature selection, multi-metric evaluation, early stopping) showing sophisticated understanding
+ ToT:
+   validity: 6  # Incorrect scaling methodology (separate fits) but overall evaluation structure is sound with proper test set usage
+   quality: 7  # Clean, readable code that would execute despite scaling issues, maintaining simplicity while adding improvements
+   novelty: 5  # Standard improvements (GradientBoosting + scaling) that are thoughtful but not groundbreaking additions
+
+eligibility:
+ Standard:
+   validity: 8  # Good evaluation methodology with proper train/test separation, though uses ExtraTreesClassifier without clear justification
+   quality: 7  # Clean, simple implementation that follows ML best practices and would execute reliably in production
+   novelty: 5  # Reasonable algorithm choice (ExtraTreesClassifier) for categorical features but minimal innovation beyond basic retraining
+ KC-fast:
+   validity: 9  # Excellent evaluation methodology with clear train/test separation and comprehensive old vs new model comparison
+   quality: 8  # Clean, well-structured code with good logging and would be safe for production deployment
+   novelty: 3  # Basic retraining approach with no algorithmic or preprocessing improvements beyond simple concatenation
+ KC-slow:
+   validity: 7  # Good methodology but unnecessarily splits combined training data again, reducing training set size without clear benefit
+   quality: 7  # Well-structured with error handling and thoughtful hyperparameters (bootstrap=False, increased estimators)
+   novelty: 6  # Good hyperparameter tuning with detailed parameter justification and validation set approach
+ KC-agent:
+   validity: 9  # Excellent methodology with clear test-only evaluation and proper data handling practices
+   quality: 8  # Clean implementation with good error handling and well-tuned hyperparameters (500 estimators, min_samples_leaf=10)
+   novelty: 6  # Thoughtful hyperparameter optimization showing understanding of RandomForest tuning for better generalization
+ Plan-Execute:
+   validity: 5  # Major flaw with separate preprocessing fits on old/new data violating ML practices, though overall structure is sound
+   quality: 3  # Implementation issues include duplicate Pipeline imports and incorrect separate preprocessing
+   novelty: 7  # Good preprocessing concepts (StandardScaler + Normalizer, proper categorical handling) but flawed execution
+ Self-Discovery:
+   validity: 3  # Multiple critical flaws including wrong dataset folder, missing OneHotEncoder import, and DataFrame operations on sparse matrices
+   quality: 2  # Severely broken with missing imports, incorrect data handling, and would crash during preprocessing phase
+   novelty: 5  # Attempts comprehensive preprocessing with GradientBoostingClassifier but implementation is fundamentally flawed
+ ReAct:
+   validity: 8  # Good evaluation methodology with proper categorical feature handling using LabelEncoder consistently across datasets
+   quality: 7  # Clean implementation with systematic categorical encoding that would be reliable in production
+   novelty: 4  # Basic approach with standard LabelEncoder for categoricals but no advanced techniques or optimizations
+ Reflexion:
+   validity: 2  # Fundamental error treating classification as regression problem, using GradientBoostingRegressor with MSE/R2 metrics
+   quality: 3  # Well-structured pipeline code but completely wrong problem formulation makes it unsuitable for classification task
+   novelty: 6  # Advanced preprocessing pipeline and proper sklearn practices but applied to wrong problem type
+ ToT:
+   validity: 6  # Same scaling methodology flaw as other methods (separate fits) but overall evaluation approach is sound
+   quality: 7  # Clean code that would execute despite scaling issues, with good hyperparameter choices for RandomForest
+   novelty: 6  # Good combination of feature scaling with optimized RandomForest parameters (500 estimators, max_depth=10)
+
+healthcare:
+ Standard:
+   validity: 8  # Good evaluation methodology with proper categorical encoding using get_dummies, though applies encoding separately
+   quality: 7  # Clean implementation with thoughtful GradientBoosting hyperparameters and proper categorical feature handling
+   novelty: 6  # Good approach using GradientBoosting with categorical encoding and reasonable hyperparameter choices
+ KC-fast:
+   validity: 9  # Excellent evaluation methodology with clear old vs new model comparison and proper train/test separation
+   quality: 8  # Clean, straightforward implementation that follows ML best practices and would be reliable in production
+   novelty: 3  # Basic retraining approach using RandomForest with no algorithmic improvements or preprocessing enhancements
+ KC-slow:
+   validity: 10  # Perfect evaluation methodology with clear test-only assessment and excellent code structure with error handling
+   quality: 9  # Excellent implementation with robust error handling, clear documentation, and conservative GradientBoosting hyperparameters
+   novelty: 7  # Well-tuned GradientBoosting with conservative parameters (learning_rate=0.05, subsample=0.8) showing good regularization understanding
+ KC-agent:
+   validity: 10  # Perfect evaluation methodology identical to KC-slow method with excellent test-only assessment and clear documentation
+   quality: 9  # Excellent implementation with robust error handling and identical conservative hyperparameter tuning as KC-slow
+   novelty: 7  # Same well-tuned GradientBoosting approach as KC-slow method with appropriate regularization parameters
+ Plan-Execute:
+   validity: 2  # Critical evaluation flaw - concatenates test sets incorrectly, evaluating on combined old+new test data instead of separate
+   quality: 3  # Severe implementation errors including improper label encoding application and incorrect test set evaluation methodology
+   novelty: 8  # Advanced approach with RandomizedSearchCV hyperparameter tuning and comprehensive parameter space exploration
+ Self-Discovery:
+   validity: 3  # Multiple critical flaws including missing SelectKBest import, incorrect correlation analysis on missing 'Target' column
+   quality: 2  # Broken implementation with missing imports, incorrect feature selection logic, and would crash during execution
+   novelty: 6  # Good concepts including correlation-based feature selection and StandardScaler preprocessing but completely flawed execution
+ Reflexion:
+   validity: 9  # Excellent evaluation methodology with proper sklearn pipeline usage and consistent preprocessing across all datasets
+   quality: 8  # Well-structured pipeline implementation with appropriate GradientBoosting parameters and good feature separation
+   novelty: 8  # Advanced sklearn pipeline approach with proper ColumnTransformer usage and comprehensive preprocessing strategy
+ ReAct:
+   validity: 8  # Good evaluation methodology though relies on external XGBoost library which may not be consistently available
+   quality: 7  # Good implementation with proper hyperparameter tuning using RandomizedSearchCV, though external dependency reduces reliability
+   novelty: 9  # Excellent approach using XGBoost with comprehensive hyperparameter tuning and advanced parameter space exploration
+ ToT:
+   validity: 8  # Good evaluation methodology with proper ColumnTransformer usage, though very conservative learning rate might limit performance
+   quality: 8  # Well-structured implementation with proper sklearn preprocessing pipelines and appropriate categorical feature handling
+   novelty: 6  # Standard approach with proper preprocessing but very conservative hyperparameters (learning_rate=0.01) that may be overly cautious
+
+nasa-fd001:
+ Standard:
+   validity: 3  # Major scaling methodology flaw - applies StandardScaler separately to train and test sets, and concatenates test sets incorrectly
+   quality: 4  # Ambitious feature scaling approach but fundamentally flawed implementation that would cause data leakage
+   novelty: 7  # Comprehensive feature scaling approach with detailed feature list and increased RandomForest estimators showing NASA data understanding
+ KC-fast:
+   validity: 9  # Excellent evaluation methodology with clear old vs new model comparison and proper train/test separation throughout
+   quality: 8  # Clean, straightforward implementation following ML best practices that would be reliable and maintainable in production
+   novelty: 3  # Basic retraining approach using RandomForest with default parameters, no algorithmic improvements or preprocessing
+ KC-slow:
+   validity: 9  # Identical methodology to KC-fast approach with excellent evaluation practices and clear documentation
+   quality: 8  # Clean implementation identical to KC-fast method, maintaining high code quality and reliability standards
+   novelty: 3  # Basic approach identical to KC-fast method with no additional innovations or improvements
+ KC-agent:
+   validity: 10  # Perfect evaluation methodology with excellent error handling, clear test-only assessment, and comprehensive documentation
+   quality: 9  # Excellent implementation with robust error handling identical to healthcare KC-agent method, production-ready code
+   novelty: 3  # Basic RandomForest retraining approach without hyperparameter tuning or algorithmic improvements
+ Plan-Execute:
+   validity: 1  # Severely flawed evaluation - concatenates all datasets incorrectly and appears to stop before model training phase
+   quality: 2  # Incomplete implementation that only performs preprocessing without model training or evaluation, making it unusable
+   novelty: 6  # Good preprocessing pipeline concept with proper ColumnTransformer usage but completely incomplete execution
+ Self-Discovery:
+   validity: 3  # Multiple critical errors including wrong dataset paths, missing imports, and f-string syntax errors
+   quality: 2  # Broken implementation with missing imports, non-existent functions, and would crash immediately during execution
+   novelty: 5  # Attempts advanced preprocessing with automatic feature type detection but completely flawed implementation
+ Reflexion:
+   validity: 2  # Good sklearn pipeline approach but flawed GridSearchCV parameter grid with invalid 'preprocessor__num__scale' parameter
+   quality: 2  # Well-structured pipeline concept but invalid hyperparameter tuning configuration that would cause runtime errors
+   novelty: 8  # Advanced approach with GridSearchCV, multiple scalers, and comprehensive preprocessing pipeline showing sophisticated understanding
+ ReAct:
+   validity: 8  # Good evaluation methodology with proper XGBoost configuration for multi-class classification and appropriate parameters
+   quality: 7  # Well-implemented XGBoost approach with domain-specific parameters (multi:softmax, num_class=4) though external dependency reduces portability
+   novelty: 8  # Advanced XGBoost usage with maintenance-specific parameters and comprehensive hyperparameter configuration
+ ToT:
+   validity: 6  # Same scaling methodology flaw as other methods (separate fits) but overall evaluation approach is sound
+   quality: 7  # Clean code that would execute despite scaling issues, with good hyperparameter choices for RandomForest
+   novelty: 5  # Standard GradientBoosting approach with reasonable parameters (200 estimators, 0.1 learning rate) but no advanced techniques
+
+nasa-fd002:
+ Standard:
+   validity: 3  # Critical evaluation flaw - concatenates test sets and evaluates on validation set instead of proper old/new test separation
+   quality: 4  # Poor evaluation methodology that undermines results, though scaling and model configuration are reasonable
+   novelty: 5  # Standard approach with increased estimators (500) and StandardScaler but fundamentally flawed evaluation
+ KC-fast:
+   validity: 9  # Excellent evaluation methodology with clear old vs new model comparison and proper train/test separation
+   quality: 8  # Clean, straightforward implementation following ML best practices that would be reliable in production
+   novelty: 3  # Basic retraining approach using RandomForest with default parameters, no algorithmic improvements
+ KC-slow:
+   validity: 9  # Excellent methodology identical to KC-fast with good logging and proper train/test separation throughout
+   quality: 8  # Clean implementation identical to KC-fast method with additional data shape logging for debugging
+   novelty: 3  # Basic approach identical to KC-fast method with no additional innovations
+ KC-agent:
+   validity: 10  # Perfect evaluation methodology with excellent error handling, comprehensive logging, and test-only assessment
+   quality: 9  # Excellent implementation with robust error handling and detailed debugging output, production-ready
+   novelty: 3  # Basic RandomForest retraining approach without hyperparameter tuning or algorithmic improvements
+ Plan-Execute:
+   validity: 2  # Multiple critical flaws including separate LabelEncoder fits on old/new data and incorrect StratifiedKFold usage
+   quality: 3  # Severely flawed implementation with incorrect preprocessing and evaluation methodology that violates ML principles
+   novelty: 7  # Advanced concepts including StratifiedKFold, MinMaxScaler, and feature selection but completely wrong implementation
+ Self-Discovery:
+   validity: 2  # Multiple critical errors including wrong dataset paths (financial instead of nasa-FD002) and incorrect feature references
+   quality: 1  # Broken implementation loading wrong dataset and attempting to scale non-existent features, would crash immediately
+   novelty: 5  # Attempts feature scaling with StandardScaler but applied to wrong dataset with incorrect feature names
+ ReAct:
+   validity: 8  # Good evaluation methodology with proper GradientBoosting implementation and reasonable hyperparameter choices
+   quality: 7  # Well-implemented GradientBoosting with thoughtful parameters (500 estimators, conservative depth) for stability
+   novelty: 7  # Good GradientBoosting configuration with regularization parameters optimized for classification tasks
+ ToT:
+   validity: 6  # Evaluation methodology issues with unnecessary validation split and VotingClassifier with single estimator
+   quality: 5  # Reasonable implementation but VotingClassifier with one model is redundant and validation split reduces training data
+   novelty: 4  # Attempts ensemble approach but VotingClassifier with single RandomForest provides no ensemble benefit
+ Reflexion:
+   validity: 7  # Good sklearn pipeline approach with RandomizedSearchCV but flawed preprocessing with overlapping feature definitions
+   quality: 6  # Well-structured pipeline concept but preprocessing configuration errors and redundant feature categorization
+   novelty: 9  # Advanced approach with RandomizedSearchCV, multiple scalers, comprehensive preprocessing, and hyperparameter optimization

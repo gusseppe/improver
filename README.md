@@ -6,42 +6,56 @@ This repository implements KC-Agent (Kahneman-Clear Agent), a novel dual-process
 
 Maintaining and improving ML models in production environments is a critical challenge as data distributions evolve over time. Traditional approaches often require extensive manual intervention or risk catastrophic forgetting when implementing improvements. KC-Agent addresses these challenges through a cognitive architecture that integrates dual-process thinking with incremental improvement principles, enabling safer and more efficient model updates.
 
-
-
 The architecture consists of two complementary systems:
 - **Fast Graph (System 1)**: Rapidly identifies and applies pattern-based fixes for common model issues
 - **Slow Graph (System 2)**: Implements careful, deliberate improvements through incremental modifications
 
 This dual-process approach optimizes the trade-off between computational efficiency and improvement quality, with theoretical guarantees for monotonic improvement under specified conditions.
 
+## Quickstart
+
+```bash
+git clone <repo>
+cd improver
+uv venv --python 3.8.8
+uv pip install -e .
+jupyter notebook results.ipynb   # view results and plots
+```
+
 ## Repository Structure
 
-- **generate_dataset.ipynb**: Creates synthetic datasets designed to simulate distribution drift across financial, healthcare, and eligibility domains
-- **dev4_financial.ipynb**, **dev4_healthcare.ipynb**: Implementation notebooks for running KC-Agent on financial and healthcare domains
-- **results.ipynb**: Visualizes results and generates comparison metrics across different approaches
-- **datasets/**: Contains synthetic datasets with distribution drift scenarios
-- **results/**: Stores experiment results and metrics
-- **paper_figures/**: Contains figures used in the research paper
+```
+caia/                    Core agent package
+  fast/                  Fast Graph (System 1)
+  slow/                  Slow Graph (System 2)
+  benchmark/             Baseline agent implementations
+datasets/                Synthetic datasets with distribution drift scenarios
+experiments/             Active experiment notebooks (dev5_* per domain, data prep)
+archive/                 Older experiment iterations (dev1-3, dev4_*)
+results/                 Per-run experiment YAML files (named by agent/dataset/llm)
+data/                    Committed result summaries, LLM evals, and human evaluation
+paper_figures*/          Figures used in the research paper, per domain
+results.ipynb            Main analysis notebook: load results and generate plots
+```
 
 ### Metrics Files
-- **fast_graph_metrics.yaml**, **slow_graph_metrics.yaml**: Performance metrics for Fast and Slow graphs
-- **metrics_baseline.yaml**, **metrics_react.yaml**, etc.: Comparison metrics for baseline approaches
-- **old_metrics.yaml**, **new_metrics.yaml**: Performance on old and new data distributions
+
+Generated at runtime by executing experiments:
+- `fast_graph_metrics.yaml`, `slow_graph_metrics.yaml`: Performance metrics for Fast and Slow graphs
+- `old_metrics.yaml`, `new_metrics.yaml`: Performance on old and new data distributions
+
+Committed result summaries:
+- `summary_metrics_{domain}.yaml`: Aggregated per-domain results
+- `llm_evals_{model}.yaml`: LLM judge evaluation scores
+- `human_evaluation.yaml`: Human evaluation scores
 
 ## Usage
 
-1. **Generating Datasets**:
-   - Run `generate_dataset.ipynb` to create synthetic datasets simulating distribution drift in different domains
-   - Execute `split_datasets.ipynb` to prepare data for improvement experiments
+1. **Generating Datasets**: Run `experiments/generate_dataset.ipynb` to create synthetic datasets simulating distribution drift in different domains, then `experiments/split_datasets.ipynb` to prepare data for improvement experiments.
 
-2. **Running Experiments**:
-   - For financial domain: Execute `dev4_financial.ipynb`
-   - For healthcare domain: Execute `dev4_healthcare.ipynb`
-   - Each notebook implements the complete KC-Agent architecture with Fast and Slow graphs
+2. **Running Experiments**: For each domain, execute the corresponding notebook in `experiments/`, for example `experiments/dev5_financial.ipynb`. Each notebook implements the complete KC-Agent architecture with Fast and Slow graphs.
 
-3. **Analyzing Results**:
-   - Use `results.ipynb` to visualize performance metrics and generate comparison plots
-   - Key metrics include accuracy on old/new data distributions, execution time, and token usage
+3. **Analyzing Results**: Use `results.ipynb` at the repo root to visualize performance metrics and generate comparison plots. Key metrics include accuracy on old/new data distributions, execution time, and token usage.
 
 ## Cognitive Architecture Components
 
@@ -56,7 +70,7 @@ The core of KC-Agent is its dual-process architecture:
 
 2. **Slow Graph (System 2)**:
    - Performs memory distillation to identify model limitations and potential improvements
-   - Analyzes improvement strategies (model selection, hyperparameter tuning, ensembling)
+   - Analyzes improvement strategies: model selection, hyperparameter tuning, ensembling
    - Implements tiny, verifiable changes with theoretical guarantees
    - Evaluates changes across both distributions to ensure balanced improvement
 
@@ -84,6 +98,7 @@ The repository includes comprehensive benchmarks comparing KC-Agent against seve
 - Reflexion
 - Self-Discovery
 - Tree of Thoughts
+- CodeAct
 
 Evaluation metrics include:
 - Accuracy on original data distribution
@@ -95,15 +110,16 @@ Results demonstrate that KC-Agent significantly outperforms baseline methods, ac
 
 ## References
 
-- Paper submitted to ECML-PKDD 2025.
+- Paper accepted at COMPSAC 2026.
 - This work is part of a larger research framework for intelligent ML model adaptation.
 
 ## Requirements
 
-See `requirements.txt` for a complete list of dependencies. Key packages include:
+See `pyproject.toml` for a complete list of dependencies. Key packages include:
 - LangGraph
-- PyTorch
+- LangChain
+- pyautogen
 - scikit-learn
 - pandas
-- matplotlib
-- yaml
+- matplotlib, seaborn
+- pyyaml

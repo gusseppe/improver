@@ -1,0 +1,259 @@
+eligibility:
+
+  plan_execute:
+    stability: 3  # Large restructuring with pipelines, preprocessing, and refits; far from baseline and risky, especially with refitting preprocessors separately.
+    quality: 4  # Code is verbose with redundant imports, inconsistent preprocessing (fit twice), and some structural mistakes.
+    smartness: 2  # Strategy is flawed (no metric improvement, incorrect preprocessing reuse, unnecessary normalization).
+
+  standard:
+    stability: 7  # Relatively small change: swapped model and concatenated data, baseline structure mostly preserved.
+    quality: 7  # Clean and readable, straightforward logic with minimal clutter.
+    smartness: 4  # ExtraTrees is reasonable, but it hurt new-distribution performance significantly.
+
+  fast:
+    stability: 9  # Very minimal changes, original structure and logic largely preserved.
+    quality: 7  # Simple, readable, but slightly redundant metric tracking.
+    smartness: 5  # Obvious strategy (retrain on combined data); maintains old and new performance but no real gain.
+
+  improver:
+    stability: 6  # Moderate changes with added error handling and hyperparameter tuning.
+    quality: 6  # Reasonably organized, but overly verbose try/except and duplicated metric dictionaries.
+    smartness: 7  # Aggressive RF tuning improved new-distribution accuracy, though old distribution regressed slightly.
+
+  self_discovery:
+    stability: 2  # Heavy rewrite with new models, preprocessing, validation splits, and duplicated imports.
+    quality: 3  # Messy code: redundant imports, unused splits, inconsistent preprocessing fits.
+    smartness: 3  # No measurable performance gain; strategy is overcomplicated without benefit.
+
+  slow:
+    stability: 6  # Moderate restructuring with validation split and hyperparameter changes.
+    quality: 6  # Clear but somewhat bloated; validation split not actually used meaningfully.
+    smartness: 6  # Hyperparameter-heavy RF improves new distribution but harms old, mixed outcome.
+
+  tot:
+    stability: 7  # Moderate changes, still close to original RF-based workflow.
+    quality: 6  # Reasonably clean, but scaling is inconsistently applied (refit scaler separately).
+    smartness: 5  # Some tuning helps old distribution, but hurts new distribution; partial success.
+
+  codeact:
+    stability: 3  # Significant restructuring with preprocessing and grid search.
+    quality: 7  # Well-structured and clean ML pipeline code.
+    smartness: 4  # Grid search is heavy-handed and led to worse generalization on new data.
+
+  react:
+    stability: 8  # Minimal conceptual changes; mostly encoding + retraining.
+    quality: 6  # Straightforward, but LabelEncoder on nominal categories is questionable.
+    smartness: 6  # Simple and effective enough to preserve baseline performance on both distributions.
+
+  reflection:
+    stability: 1  # Complete paradigm shift from classification to regression with different metrics.
+    quality: 4  # Technically structured, but mismatched to the task and metrics.
+    smartness: 1  # Fundamentally inappropriate strategy; ignores classification objective entirely.
+
+financial:
+
+  tot:
+    stability: 6  # Moderate changes: model swap to GradientBoosting and feature scaling, but baseline flow (load → train → eval) preserved.
+    quality: 6  # Reasonably clean, but scaler is fit separately on old and new data, which is inconsistent.
+    smartness: 7  # GradientBoosting on combined data is a solid choice and clearly improves new-distribution performance.
+
+  codeact:
+    stability: 9  # Very small change: simply retrains the same model on combined data.
+    quality: 7  # Clean, concise, and easy to follow.
+    smartness: 6  # Straightforward strategy; effective improvement on new data but not particularly sophisticated.
+
+  improver:
+    stability: 7  # Adds tuning and retraining logic without fully rewriting the pipeline.
+    quality: 7  # Well-structured, readable, with sensible error handling.
+    smartness: 9  # Strong hyperparameter choices for GradientBoosting; achieves the largest gain on new distribution while preserving old performance.
+
+  self_discovery:
+    stability: 2  # Heavy rewrite with broken f-strings and incorrect preprocessing logic.
+    quality: 2  # Code has serious issues (wrong paths, misuse of encoders, invalid assignments).
+    smartness: 1  # Strategy is ineffective and results in no improvement at all.
+
+  reflection:
+    stability: 2  # Massive overhaul introducing LightGBM, feature selection, and extra metrics.
+    quality: 5  # Technically sophisticated, but overly complex and partially inconsistent with pipeline usage.
+    smartness: 3  # Overengineered approach with no performance gain on either distribution.
+
+  fast:
+    stability: 9  # Minimal changes; very close to the baseline structure.
+    quality: 7  # Clear and readable, though verbose with debug prints.
+    smartness: 6  # Simple retraining strategy that yields a solid improvement on new data.
+
+  slow:
+    stability: 6  # Moderate refactor introducing GradientBoosting and extra evaluation logic.
+    quality: 6  # Acceptable structure, but some redundant variables and unused components.
+    smartness: 7  # Reasonable use of GradientBoosting; improves new distribution while keeping old strong.
+
+  standard:
+    stability: 4  # Significant additions: scaling, SMOTE, validation splits.
+    quality: 4  # Contains clear errors (invalid SMOTEMethod import, inconsistent scaling).
+    smartness: 2  # Intended strategy is reasonable, but execution is flawed and yields no gains.
+
+  react:
+    stability: 8  # Essentially unchanged baseline code.
+    quality: 6  # Clean but minimal.
+    smartness: 1  # No adaptation to new distribution; performance collapses badly.
+
+  plan_execute:
+    stability: 1  # Extreme restructuring with tangled preprocessing, encoding, and resampling steps.
+    quality: 1  # Very messy and inconsistent; multiple incorrect transformations and invalid logic.
+    smartness: 1  # Strategy is fundamentally broken and produces no improvement despite complexity.
+
+healthcare:
+
+  fast:
+    stability: 9  # Very minimal change from baseline: same model, simple data concatenation.
+    quality: 6  # Readable but slightly redundant (duplicate loading of y_test_new).
+    smartness: 7  # Straightforward retraining on combined data yields a clear gain on the new distribution.
+
+  self_discovery:
+    stability: 2  # Heavy rewrite with feature selection and scaling logic added.
+    quality: 3  # Code contains conceptual issues (correlation with non-existent 'Target', refitting selectors separately).
+    smartness: 1  # No performance gain; strategy is ineffective despite complexity.
+
+  reflection:
+    stability: 3  # Significant restructuring with pipelines and different model.
+    quality: 7  # Clean, well-structured pipeline code.
+    smartness: 6  # GradientBoosting + proper preprocessing is sensible and improves both distributions modestly.
+
+  react:
+    stability: 4  # Major change in model family and hyperparameter tuning.
+    quality: 7  # Well-organized, readable use of RandomizedSearchCV.
+    smartness: 7  # XGBoost with tuning is appropriate and improves new-distribution performance.
+
+  slow:
+    stability: 6  # Moderate refactor introducing GradientBoosting while keeping core flow.
+    quality: 6  # Clear structure, though somewhat verbose and repetitive.
+    smartness: 8  # Well-chosen boosting setup that significantly improves both old and new distributions.
+
+  improver:
+    stability: 6  # Similar to slow: moderate changes without a full rewrite.
+    quality: 6  # Clean and consistent, but largely duplicated logic.
+    smartness: 8  # Strong, balanced GradientBoosting strategy with solid gains on new data.
+
+  standard:
+    stability: 7  # Moderate changes: model swap and one-hot encoding.
+    quality: 6  # Acceptable readability, but manual dummy handling is brittle.
+    smartness: 3  # Reasonable idea, but no performance improvement at all.
+
+  tot:
+    stability: 6  # Introduces ColumnTransformer and different hyperparameters.
+    quality: 7  # Clean and idiomatic sklearn usage.
+    smartness: 5  # Gains new-distribution accuracy but at the cost of old-distribution performance.
+
+  plan_execute:
+    stability: 3  # Large restructuring with encoding and hyperparameter search.
+    quality: 3  # Logical errors (evaluating old/new on concatenated test data).
+    smartness: 1  # Strategy is flawed and yields no improvement.
+
+  codeact:
+    stability: 9  # Minimal deviation: retrain same model on combined data.
+    quality: 7  # Simple, clean, and easy to follow.
+    smartness: 7  # Basic but effective approach that substantially improves new-distribution accuracy.
+
+nasa-FD002:
+
+  improver:
+    stability: 8  # Very close to baseline: same model, simple data concatenation, extra logging only.
+    quality: 6  # Clear and readable, but verbose debug prints add noise.
+    smartness: 7  # Simple retraining on combined data dramatically improves new-distribution performance.
+
+  codeact:
+    stability: 9  # Minimal deviation from baseline; same workflow and model.
+    quality: 7  # Clean, concise, and easy to follow.
+    smartness: 7  # Straightforward combined-data training yields a large gain on new data.
+
+  plan_execute:
+    stability: 3  # Heavy restructuring with encoders, scalers, and CV logic.
+    quality: 3  # Multiple logical issues (misuse of StratifiedKFold, inconsistent scaling, missing imports).
+    smartness: 1  # No improvement at all; strategy fails to address distribution shift.
+
+  standard:
+    stability: 4  # Moderate refactor with scaling and larger forest.
+    quality: 5  # Reasonably structured, but mixes validation and test logic incorrectly.
+    smartness: 2  # Increased capacity does not improve either distribution.
+
+  slow:
+    stability: 8  # Very similar to baseline with added combined training.
+    quality: 6  # Readable but verbose with unnecessary shape prints.
+    smartness: 7  # Same effective strategy as improver/codeact with strong new-distribution gains.
+
+  tot:
+    stability: 5  # Introduces ensemble logic and validation split.
+    quality: 6  # Code is readable but ensemble is redundant (single estimator).
+    smartness: 4  # VotingClassifier adds no value and slightly degrades performance.
+
+  fast:
+    stability: 9  # Minimal, baseline-like changes.
+    quality: 7  # Simple and consistent implementation.
+    smartness: 7  # Combined-data retraining again proves effective.
+
+  self_discovery:
+    stability: 3  # Significant preprocessing and restructuring added.
+    quality: 5  # Cleaner than plan_execute, but preprocessing is inconsistent and partly unused.
+    smartness: 1  # No performance gain despite added complexity.
+
+  react:
+    stability: 6  # Switches model family but keeps overall flow.
+    quality: 6  # Clear GradientBoosting setup with reasonable parameters.
+    smartness: 6  # Boosting improves new-distribution accuracy but hurts old performance.
+
+  reflection:
+    stability: 2  # Large overhaul with pipelines, encoders, and hyperparameter search.
+    quality: 7  # Well-structured and idiomatic sklearn pipeline code.
+    smartness: 4  # Overengineered approach that underperforms simpler retraining strategies.
+
+nasa:
+
+  tot:
+    stability: 7  # Moderate change: model swap to GradientBoosting and combined training, but overall flow preserved.
+    quality: 7  # Clean, concise code with clear training/evaluation steps.
+    smartness: 8  # GradientBoosting on combined data is an effective choice and yields a large improvement on new distribution.
+
+  fast:
+    stability: 9  # Very close to baseline; same model and logic with simple data concatenation.
+    quality: 7  # Readable and consistent, slightly verbose but clear.
+    smartness: 7  # Straightforward retraining strategy that strongly improves new-distribution performance.
+
+  codeact:
+    stability: 8  # Small refactor with combined training and a validation split.
+    quality: 7  # Clean and easy to follow, sensible structure.
+    smartness: 6  # Reasonable approach; gains on new data but not as strong as simpler retraining.
+
+  react:
+    stability: 5  # Significant model change to XGBoost.
+    quality: 7  # Well-structured code with explicit hyperparameters.
+    smartness: 7  # XGBoost is appropriate and improves new distribution, though gains are similar to simpler RF retraining.
+
+  reflection:
+    stability: 3  # Large overhaul with pipelines, grid search, and feature engineering.
+    quality: 7  # Technically well-structured pipeline code.
+    smartness: 2  # Overengineered and fails to improve performance at all.
+
+  slow:
+    stability: 9  # Minimal deviation from baseline with combined training.
+    quality: 7  # Simple and readable, though repetitive.
+    smartness: 7  # Same effective combined-data strategy with strong new-distribution gains.
+
+  self_discovery:
+    stability: 2  # Heavy rewrite with preprocessing and invalid constructs.
+    quality: 2  # Broken code (invalid f-strings, nonexistent encoders).
+    smartness: 1  # No improvement; strategy is ineffective and error-prone.
+
+  standard:
+    stability: 4  # Moderate refactor with scaling and larger forest.
+    quality: 4  # Inconsistent evaluation logic and questionable preprocessing.
+    smartness: 1  # Severely degrades old performance; strategy backfires.
+
+  plan_execute:
+    stability: 2  # Major restructuring focused on preprocessing only.
+    quality: 3  # Incomplete pipeline; no model training/evaluation.
+    smartness: 1  # Does not address the task and yields poor results.
+
+  improver:
+    stability: 9  # Very small, surgical change: retrain same model on combined data.
+    quality: 7  # Clear, consistent, and easy to follow.
+    smartness: 8  # Simple yet highly effective approach, delivering one of the best new-distribution gains.

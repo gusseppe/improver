@@ -4,3 +4,37 @@ misc/*
 .cache/
 .vscode/
 tmp_code*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+# uv / virtualenv
+.venv/
+*.egg-info/
+dist/
+
+# Generated runtime artifacts (re-created by running experiments)
+old_metrics.yaml
+new_metrics.yaml
+fast_graph_metrics.yaml
+slow_graph_metrics.yaml
+improved_old_metrics.yaml
+old_ensemble_metrics.yaml
+old_model_metrics.yaml
+new_model_metrics.yaml
+large_graph_metrics.yaml
+performance_metrics.yaml
+slow_graph_improvements.yaml
+metrics_reflection.json
+metrics_reflection.pkl
+improvement_plot.png
+initial_code_*.yaml
+initial_metrics_*.yaml
+.cache_langchain.db
+
+# Claude
+CLAUDE.md

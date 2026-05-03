@@ -1,0 +1,798 @@
+initial_code: |-
+  import pandas as pd
+  from sklearn.ensemble import RandomForestClassifier
+
+  # load the old data
+  dataset_folder = "datasets/eligibility"
+  X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+  X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+  y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+  y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+  model_old = RandomForestClassifier(random_state=42)
+
+
+  model_old.fit(X_train_old, y_train_old)
+
+  # Test the model on the old test set
+  old_accuracy = model_old.score(X_test_old, y_test_old)
+
+  print(f'Model trained and evaluated on the old distribution: {old_accuracy}')
+initial_metrics:
+  old_distribution: 0.7833333333333333
+  new_distribution: 0.6333333333333333
+plan_execute:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    from sklearn.preprocessing import StandardScaler, Normalizer
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import Pipeline
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score
+
+    # Initialize metrics dictionary
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    # Load data from specified folder
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    # Load new data
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Select numerical features
+    numerical_features = ["Age", "Income"]
+
+    # Define preprocessing pipelines for numerical and categorical data
+    numerical_pipeline = Pipeline([
+        ('scaler', StandardScaler()),
+        ('normalizer', Normalizer(norm='l1')) # L1 Normalizer to evaluate its impact
+    ])
+
+    categorical_features = ['Education Level', 'Employment Status', 'Marital Status']
+    categorical_pipeline = Pipeline([
+        ('encoder', OneHotEncoder(sparse=False, handle_unknown='ignore'))
+    ])
+
+    # Create an estimator chain using ColumnTransformer
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numerical_pipeline, numerical_features),
+            ('cat', categorical_pipeline, categorical_features)
+        ]
+    )
+
+    # Fit and transform data using the preprocessor
+    X_train_old_transformed = preprocessor.fit_transform(X_train_old)
+    X_test_old_transformed = preprocessor.transform(X_test_old)
+    X_train_new_transformed = preprocessor.fit_transform(X_train_new)
+    X_test_new_transformed = preprocessor.transform(X_test_new)
+
+    # Combine old and new data for training
+    X_train_combined = pd.concat([pd.DataFrame(X_train_old_transformed), pd.DataFrame(X_train_new_transformed)])
+    y_train_combined = pd.concat([y_train_old, y_train_new])
+
+    # Train RandomForestClassifier on combined and preprocessed data
+    model_new = RandomForestClassifier(
+        n_estimators=20, # smaller number of estimators
+        random_state=42
+    )
+
+    model_new.fit(X_train_combined, y_train_combined)
+
+    # Evaluate model on old test set
+    old_score = accuracy_score(y_test_old, model_new.predict(X_test_old_transformed))
+    print(f'New model evaluated on old distribution: {old_score}')
+    model_new_score['on_old_data'] = float(old_score)
+
+    # Evaluate model on new test set
+    new_score = accuracy_score(y_test_new, model_new.predict(X_test_new_transformed))
+    print(f'New model evaluated on new distribution: {new_score}')
+    model_new_score['on_new_data'] = float(new_score)
+
+    # Save metrics
+    with open('metrics_plan_execute.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.7833333333333333
+    new_distribution: 0.6333333333333333
+standard:
+  final_code: |-
+    import pandas as pd
+    from sklearn.ensemble import ExtraTreesClassifier
+    from sklearn.metrics import accuracy_score
+    import yaml
+
+    # Initialize metrics dictionary
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    # Load data from specified folder
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    # Load new data
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Combine the old and new data for training the new model
+    X_train = pd.concat([X_train_old, X_train_new])
+    y_train = pd.concat([y_train_old, y_train_new])
+
+    # Since there are categorical features (Education Level, Employment Status, and Marital Status), try Tree-based ensemble
+    # With default hyperparameters, ExtraTreesClassifier is a good starting point
+    model_new = ExtraTreesClassifier(
+        n_estimators=100,
+        random_state=42
+    )
+
+    model_new.fit(X_train, y_train)
+
+    # Evaluate the new model on old test set
+    new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+    print(f'New model trained and evaluated on old distribution: {new_score_old}')
+    model_new_score['on_old_data'] = float(new_score_old)
+
+    # Evaluate the new model on new test set
+    new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
+    print(f'New model evaluated on new distribution: {new_score_new}')
+    model_new_score['on_new_data'] = float(new_score_new)
+
+    # Save metrics
+    with open('metrics_baseline.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.7866666666666666
+    new_distribution: 0.5666666666666667
+fast:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+
+    # Initialize metrics dictionaries
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+    model_old_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    # load the old data
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    # Train and evaluate old model
+    model_old = RandomForestClassifier(random_state=42)
+    model_old.fit(X_train_old, y_train_old)
+
+    # Test old model on old test set
+    old_score_old = model_old.score(X_test_old, y_test_old)
+    print(f'Old model trained and evaluated on the old distribution: {old_score_old}')
+    model_old_score['on_old_data'] = float(old_score_old)
+
+    # Test old model on new test set
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+    old_score_new = model_old.score(X_test_new, y_test_new)
+    print(f'Old model evaluated on the new distribution: {old_score_new}')
+    model_old_score['on_new_data'] = float(old_score_new)
+
+    # Save old model metrics
+    with open('old_metrics.yaml', 'w') as f:
+        yaml.dump({'model_old_score': model_old_score}, f)
+
+    print("\nRetraining new model on combined data...")
+
+    # load new training data and combine it with old data
+    X_train_new = pd.read_csv(f"datasets/eligibility/X_train_new.csv")
+    y_train_new = pd.read_csv(f"datasets/eligibility/y_train_new.csv").squeeze("columns")
+    X_train = pd.concat([X_train_old, X_train_new])
+    y_train = pd.concat([y_train_old, y_train_new])
+
+    # Train new model on combined dataset
+    model_new = RandomForestClassifier(random_state=42)
+    model_new.fit(X_train, y_train)
+
+    # Test new model on old test set
+    new_score_old = model_new.score(X_test_old, y_test_old)
+    print(f'New model trained and evaluated on old distribution: {new_score_old}')
+    model_new_score['on_old_data'] = float(new_score_old)
+
+    # Test new model on new test set
+    new_score_new = model_new.score(X_test_new, y_test_new)
+    print(f'New model evaluated on new distribution: {new_score_new}')
+    model_new_score['on_new_data'] = float(new_score_new)
+
+    # Save new model metrics
+    with open('fast_graph_metrics.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.7866666666666666
+    new_distribution: 0.6333333333333333
+improver:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score
+
+    # Initialize metrics dictionaries
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    model_old_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    try:
+      # Load data from specified folder
+      dataset_folder = "datasets/eligibility"
+      X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+      X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+      y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+      y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+      # Load new data
+      X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+      y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+      X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+      y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+      # Define metrics dictionary
+      model_large_score = {
+          'on_new_data': 0.0,
+          'on_old_data': 0.0
+      }
+
+      # Train improved model on old data only
+      model_old = RandomForestClassifier(random_state=42)
+      model_old.fit(X_train_old, y_train_old)
+
+      # Evaluate improved model on old test set (ONLY test data)
+      old_score_old = accuracy_score(y_test_old, model_old.predict(X_test_old))
+      print(f'Old model trained and evaluated on the old distribution: {old_score_old}')
+      model_old_score['on_old_data'] = float(old_score_old)
+
+      # Evaluate improved model on new test set (ONLY test data)
+      old_score_new = accuracy_score(y_test_new, model_old.predict(X_test_new))
+      print(f'Old model evaluated on the new distribution: {old_score_new}')
+      model_old_score['on_new_data'] = float(old_score_new)
+
+      # Save old model metrics
+      with open('old_metrics.yaml', 'w') as f:
+          yaml.dump({'model_old_score': model_old_score}, f)
+
+      # Train new model on combined data
+      X_train = pd.concat([X_train_old, X_train_new])
+      y_train = pd.concat([y_train_old, y_train_new])
+      model_new = RandomForestClassifier(
+          bootstrap=False,
+          class_weight=None,
+          max_depth=None,
+          min_samples_leaf=10,
+          n_estimators=500,
+          n_jobs=1,
+          random_state=42
+      )
+      model_new.fit(X_train, y_train)
+
+      # Evaluate new model on old test set (ONLY test data)
+      new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+      print(f'New model trained and evaluated on old distribution: {new_score_old}')
+      model_large_score['on_old_data'] = float(new_score_old)
+
+      # Evaluate new model on new test set (ONLY test data)
+      new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
+      print(f'New model evaluated on new distribution: {new_score_new}')
+      model_large_score['on_new_data'] = float(new_score_new)
+
+      # Save new model metrics
+      with open('large_graph_metrics.yaml', 'w') as f:
+          yaml.dump({'model_large_score': model_large_score}, f)
+
+    except FileNotFoundError as e:
+      print(f"Required data file not found: {str(e)}")
+      print("Ensure all train/test files for old and new data exist.")
+    except TypeError as e:
+      print(f"Model training error: {str(e)}")
+      print("Verify base model or arguments.")
+    except Exception as e:
+      print(f"Unexpected error during model training: {str(e)}")
+  final_metrics:
+    old_distribution: 0.7733333333333333
+    new_distribution: 0.6666666666666666
+self_discovery:
+  final_code: |-
+    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+    import pandas as pd
+    import numpy as np
+    import yaml
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.metrics import accuracy_score
+    from sklearn.model_selection import train_test_split
+    from sklearn.impute import SimpleImputer
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+
+    # Initialize metrics
+    model_new_score = {
+        'on_old_data': 0.0,
+        'on_new_data': 0.0
+    }
+
+    # Load data - USE THESE EXACT PATHS
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Define preprocessing functions
+    numerical_features = ['Age', 'Income']
+    categorical_features = ['Education Level', 'Employment Status', 'Marital Status']
+
+    numerical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore'))
+    ])
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numerical_transformer, numerical_features),
+            ('cat', categorical_transformer, categorical_features)])
+
+    # Apply preprocessing to old data
+    X_train_old_preprocessed = preprocessor.fit_transform(X_train_old)
+    X_test_old_preprocessed = preprocessor.transform(X_test_old)
+
+    X_train_new_preprocessed = preprocessor.fit_transform(X_train_new)
+    X_test_new_preprocessed = preprocessor.transform(X_test_new)
+
+    # Combine datasets
+    X_train_combined = pd.concat([X_train_old_preprocessed, X_train_new_preprocessed])
+    y_train_combined = pd.concat([y_train_old, y_train_new])
+
+    # Split old data into training and testing sets
+    X_train_old, X_val_old, y_train_old, y_val_old = train_test_split(X_train_old_preprocessed, y_train_old, test_size=0.2, random_state=42)
+
+    # Train model
+    model = GradientBoostingClassifier(random_state=42)
+    model.fit(X_train_combined, y_train_combined)
+
+    # Evaluate on old distribution
+    y_pred_old = model.predict(X_test_old_preprocessed)
+    old_score = accuracy_score(y_test_old, y_pred_old)
+    print(f'Model evaluated on old distribution: {old_score}')
+    model_new_score['on_old_data'] = float(old_score)
+
+    # Evaluate on new distribution
+    y_pred_new = model.predict(X_test_new_preprocessed)
+    new_score = accuracy_score(y_test_new, y_pred_new)
+    print(f'Model evaluated on new distribution: {new_score}')
+    model_new_score['on_new_data'] = float(new_score)
+
+    # Save metrics
+    with open('metrics_self_discovery.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.7833333333333333
+    new_distribution: 0.6333333333333333
+slow:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score
+
+    # Initialize metrics dictionary
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    try:
+        # Load data from specified folder
+        dataset_folder = "datasets/eligibility"
+        X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+        X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+        y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+        y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+        # Load new data
+        X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+        y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+        X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+        y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+        # Combine old and new training data
+        X_train = pd.concat([X_train_old, X_train_new])
+        y_train = pd.concat([y_train_old, y_train_new])
+
+        # Define validation set
+        X_train_split, X_val_split, y_train_split, y_val_split = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+
+        # Configure model with optimized hyperparameters
+        model_new = RandomForestClassifier(
+            bootstrap=False,  # No bootstrapping for more robustness
+            class_weight=None,  # No class weighting for natural balancing
+            max_depth=None,  # No maximum depth for full tree exploration
+            min_samples_leaf=10,  # Smaller minimum samples for more precise splits
+            n_estimators=500,  # Increased for better generalization
+            n_jobs=1,  # Single-threaded for faster training
+            random_state=42  # Seeds for reproducibility
+        )
+
+        # Train model on combined training data with validation set
+        model_new.fit(X_train_split, y_train_split)
+
+        # Store validation set(s) for later evaluation
+        val_set = (X_val_split, y_val_split)
+
+        # Evaluate model on old test set (using only test set, no evaluation on train/validation set)
+        new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+        print(f'New model trained and evaluated on old distribution: {new_score_old}')
+        model_new_score['on_old_data'] = float(new_score_old)
+
+        # Evaluate model on new test set (using only test set, no evaluation on train/validation set)
+        new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
+        print(f'New model evaluated on new distribution: {new_score_new}')
+        model_new_score['on_new_data'] = float(new_score_new)
+
+        # Save new model metrics
+        with open('slow_graph_metrics.yaml', 'w') as f:
+            yaml.dump({'model_new_score': model_new_score}, f)
+
+    except FileNotFoundError as e:
+        print(f"Required data file not found: {str(e)}")
+        print("Ensure all train/test files for old and new data exist.")
+    except TypeError as e:
+        print(f"Model training error: {str(e)}")
+        print("Verify base model or arguments.")
+    except Exception as e:
+        print(f"Unexpected error during model training: {str(e)}")
+  final_metrics:
+    old_distribution: 0.7666666666666667
+    new_distribution: 0.6666666666666666
+tot:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score
+
+    # Initialize metrics dictionary
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    # Load data from specified folder
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    # Load new data
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Scale features
+    scaler = StandardScaler()
+    X_train_old_scaled = scaler.fit_transform(X_train_old)
+    X_test_old_scaled = scaler.transform(X_test_old)
+    X_train_new_scaled = scaler.fit_transform(X_train_new)
+    X_test_new_scaled = scaler.transform(X_test_new)
+
+    # Train on combined data
+    X_train = pd.concat([pd.DataFrame(X_train_old_scaled), pd.DataFrame(X_train_new_scaled)])
+    y_train = pd.concat([y_train_old, y_train_new])
+
+    model_new = RandomForestClassifier(
+        n_estimators=500,
+        max_depth=10,
+        min_samples_split=5,
+        random_state=42
+    )
+
+    model_new.fit(X_train, y_train)
+
+    # Evaluate on old distribution
+    old_score = accuracy_score(y_test_old, model_new.predict(X_test_old_scaled))
+    print(f'New model trained and evaluated on old distribution: {old_score}')
+    model_new_score['on_old_data'] = float(old_score)
+
+    # Evaluate on new distribution
+    new_score = accuracy_score(y_test_new, model_new.predict(X_test_new_scaled))
+    print(f'New model evaluated on new distribution: {new_score}')
+    model_new_score['on_new_data'] = float(new_score)
+
+    # Save metrics
+    with open('metrics_tot.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.8033333333333333
+    new_distribution: 0.6
+codeact:
+  final_code: |-
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+
+    # load the data
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Combine old and new training data
+    X_train_combined = pd.concat([X_train_old, X_train_new])
+    y_train_combined = pd.concat([y_train_old, y_train_new])
+
+    # Separate numerical and categorical features
+    numerical_features = ['Age', 'Income']
+    categorical_features = ['Education Level', 'Employment Status', 'Marital Status']
+
+    # Define the preprocessing steps
+    numerical_transformer = SimpleImputer(strategy='median')
+    categorical_transformer = OneHotEncoder(handle_unknown='ignore')
+
+    # Define the preprocessing pipeline
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numerical_transformer, numerical_features),
+            ('cat', categorical_transformer, categorical_features)
+        ]
+    )
+
+    # Fit the preprocessing pipeline to the training data
+    preprocessor.fit(X_train_combined)
+
+    # Apply the preprocessing pipeline to the training and testing data
+    X_train_transformed = preprocessor.transform(X_train_combined)
+    X_test_old_transformed = preprocessor.transform(X_test_old)
+    X_test_new_transformed = preprocessor.transform(X_test_new)
+
+    # Define the hyperparameter grid for GridSearchCV
+    param_grid = {
+        'n_estimators': [100, 200, 300, 400, 500],
+        'max_depth': [None, 5, 10, 15, 20],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4]
+    }
+
+    # Perform GridSearchCV
+    grid_search = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, scoring='f1_macro')
+    grid_search.fit(X_train_transformed, y_train_combined)
+
+    # Get the best model and its parameters
+    best_model = grid_search.best_estimator_
+    best_params = grid_search.best_params_
+
+    # Predict on the old and new test sets using the best model
+    old_accuracy = best_model.score(X_test_old_transformed, y_test_old)
+    new_accuracy = best_model.score(X_test_new_transformed, y_test_new)
+
+    print(f'Model trained and evaluated on both distributions old accuracy: {old_accuracy}, new accuracy: {new_accuracy}')
+
+    # Save metrics to 'metrics_codeact.yaml'
+    import yaml
+    model_new_score = {'on_new_data': float(new_accuracy), 'on_old_data': float(old_accuracy)}
+    with open('metrics_codeact.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.7733333333333333
+    new_distribution: 0.5666666666666667
+react:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.metrics import accuracy_score
+    from sklearn.model_selection import train_test_split
+
+    # Initialize metrics dictionary
+    model_new_score = {
+        'on_new_data': 0.0,
+        'on_old_data': 0.0
+    }
+
+    # Load old data
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    # Load new data
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Combine training data
+    X_train = pd.concat([X_train_old, X_train_new])
+    y_train = pd.concat([y_train_old, y_train_new])
+
+    # Apply label encoding to categorical features
+    categorical_features = ['Education Level', 'Employment Status', 'Marital Status']
+    le = LabelEncoder()
+    for feature in categorical_features:
+        X_train[feature] = le.fit_transform(X_train[feature])
+        X_test_old[feature] = le.transform(X_test_old[feature])
+        X_test_new[feature] = le.transform(X_test_new[feature])
+
+    # Create and train model
+    model_new = RandomForestClassifier(random_state=42)
+    model_new.fit(X_train, y_train)
+
+    # Evaluate on old distribution
+    new_score_old = accuracy_score(y_test_old, model_new.predict(X_test_old))
+    print(f'New model trained and evaluated on old distribution: {new_score_old}')
+    model_new_score['on_old_data'] = float(new_score_old)
+
+    # Evaluate on new distribution
+    new_score_new = accuracy_score(y_test_new, model_new.predict(X_test_new))
+    print(f'New model evaluated on new distribution: {new_score_new}')
+    model_new_score['on_new_data'] = float(new_score_new)
+
+    # Save metrics
+    with open('metrics_react.yaml', 'w') as f:
+        yaml.dump({'model_new_score': model_new_score}, f)
+  final_metrics:
+    old_distribution: 0.7866666666666666
+    new_distribution: 0.6333333333333333
+reflection:
+  final_code: |-
+    import yaml
+    import pandas as pd
+    import numpy as np
+    from sklearn.preprocessing import StandardScaler, OneHotEncoder
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+    from sklearn.ensemble import GradientBoostingRegressor
+    from sklearn.metrics import mean_squared_error, r2_score
+
+    # Initialize metrics dictionary
+    model_new_score = {
+        'on_new_data': {
+            'mse': 0.0,
+            'r2_score': 0.0
+        },
+        'on_old_data': {
+            'mse': 0.0,
+            'r2_score': 0.0
+        }
+    }
+
+    # Load data from specified folder
+    dataset_folder = "datasets/eligibility"
+    X_train_old = pd.read_csv(f"{dataset_folder}/X_train_old.csv")
+    X_test_old = pd.read_csv(f"{dataset_folder}/X_test_old.csv")
+    y_train_old = pd.read_csv(f"{dataset_folder}/y_train_old.csv").squeeze("columns")
+    y_test_old = pd.read_csv(f"{dataset_folder}/y_test_old.csv").squeeze("columns")
+
+    # Load new data
+    X_train_new = pd.read_csv(f"{dataset_folder}/X_train_new.csv")
+    y_train_new = pd.read_csv(f"{dataset_folder}/y_train_new.csv").squeeze("columns")
+    X_test_new = pd.read_csv(f"{dataset_folder}/X_test_new.csv")
+    y_test_new = pd.read_csv(f"{dataset_folder}/y_test_new.csv").squeeze("columns")
+
+    # Scale target variables
+    scaler = StandardScaler()
+    y_train_combined = pd.concat([y_train_old, y_train_new])
+    y_train_scaled = scaler.fit_transform(y_train_combined.values.reshape(-1, 1))
+    y_test_old_scaled = scaler.transform(y_test_old.values.reshape(-1, 1))
+    y_test_new_scaled = scaler.transform(y_test_new.values.reshape(-1, 1))
+
+    # Define feature types
+    numerical_features = ['Age', 'Income']
+    categorical_features = ['Education Level', 'Employment Status', 'Marital Status']
+
+    # Create preprocessing pipeline
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), numerical_features),
+            ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
+        ],
+        remainder='passthrough'
+    )
+
+    # Create pipeline with preprocessing and model
+    pipeline = Pipeline([
+        ('preprocessor', preprocessor),
+        ('classifier', GradientBoostingRegressor(
+            n_estimators=100,
+            learning_rate=0.1,
+            max_depth=3,
+            subsample=0.8,
+            random_state=42
+        ))
+    ])
+
+    # Combine old and new training data
+    X_train_combined = pd.concat([X_train_old, X_train_new]).reset_index(drop=True)
+
+    # Ensure all column names are strings to avoid type errors
+    X_train_combined.columns = X_train_combined.columns.astype(str)
+    X_test_old.columns = X_test_old.columns.astype(str)
+    X_test_new.columns = X_test_new.columns.astype(str)
+
+    # Train the pipeline
+    pipeline.fit(X_train_combined, y_train_scaled.ravel())
+
+    # Evaluate on old distribution
+    old_predictions_scaled = pipeline.predict(X_test_old)
+    old_mse = mean_squared_error(y_test_old, old_predictions_scaled)
+    old_r2 = r2_score(y_test_old, old_predictions_scaled)
+    print(f'Old distribution MSE: {old_mse}')
+    print(f'Old distribution R2 score: {old_r2}')
+    model_new_score['on_old_data'] = {'mse': float(old_mse), 'r2_score': float(old_r2)}
+
+    # Evaluate on new distribution
+    new_predictions_scaled = pipeline.predict(X_test_new)
+    new_mse = mean_squared_error(y_test_new, new_predictions_scaled)
+    new_r2 = r2_score(y_test_new, new_predictions_scaled)
+    print(f'New distribution MSE: {new_mse}')
+    print(f'New distribution R2 score: {new_r2}')
+    model_new_score['on_new_data'] = {'mse': float(new_mse), 'r2_score': float(new_r2)}
+
+    # Save metrics to a YAML file
+    with open('metrics_reflection.yaml', 'w') as f:
+        yaml.dump(model_new_score, f, default_flow_style=False)
+  final_metrics:
+    old_distribution: 0.7833333333333333
+    new_distribution: 0.6333333333333333

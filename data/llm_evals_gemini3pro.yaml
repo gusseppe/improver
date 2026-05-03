@@ -1,0 +1,205 @@
+eligibility:
+  plan_execute:
+    stability: 3  # Significant structural change introducing complex Pipelines and ColumnTransformers not present in baseline.
+    quality: 5  # Code is readable, but hardcoding feature names (Age, Income) makes it brittle; reducing n_estimators to 20 is bad practice.
+    smartness: 1  # Metrics did not improve; reducing model complexity (n_estimators=20) was a poor choice for this task.
+  standard:
+    stability: 8  # Very minimal changes; simply swapped the classifier class and concatenated data.
+    quality: 9  # Clean, concise, and Pythonic.
+    smartness: 2  # Metrics regressed significantly on the new distribution (0.63 -> 0.56); blind model swap failed.
+  fast:
+    stability: 6  # Preserves logic but adds significant distinct blocks for separate training runs.
+    quality: 4  # High redundancy; re-reads CSV files multiple times unnecessarily; inefficient I/O.
+    smartness: 2  # Metrics did not improve; simple data concatenation strategy was insufficient here.
+  improver:
+    stability: 6  # restructure to include error handling and specific hyperparameter definitions.
+    quality: 8  # robust code with error handling (try/except) and explicit parameter definitions.
+    smartness: 9  # Best performance; turning off bootstrapping and increasing leaf size successfully generalized to the new distribution (0.63 -> 0.67).
+  self_discovery:
+    stability: 3  # Complete rewrite using Pipelines, Imputers, and GradientBoosting.
+    quality: 7  # technically proficient sklearn usage, though perhaps over-engineered for the task.
+    smartness: 2  # Massive engineering effort resulted in zero metric improvement; inefficient strategy.
+  slow:
+    stability: 6  # Similar to improver; logic modified to include validation splits (though unused).
+    quality: 6  # Contains dead code (validation split defined but not used in fit); redundant logic.
+    smartness: 8  # Achieved the same high metrics as 'improver' using the same hyperparameter strategy.
+  tot:
+    stability: 7  # Moderate changes; added scaling logic.
+    quality: 5  # Applying StandardScaler to a Random Forest is mathematically unnecessary and adds complexity without benefit.
+    smartness: 1  # Metrics regressed on the target distribution; poor understanding of tree-based models.
+  codeact:
+    stability: 4  # Major refactor to implement GridSearchCV and preprocessing pipelines.
+    quality: 8  # Good use of standard sklearn tools (GridSearch, ColumnTransformer).
+    smartness: 1  # Optimization failed drastically (0.63 -> 0.56); likely overfit or optimized for the wrong metric (F1 vs Accuracy).
+  react:
+    stability: 7  # Standard changes; added LabelEncoding loop.
+    quality: 7  # Clear and readable, though LabelEncoding is less robust than OneHot for non-ordinal data.
+    smartness: 2  # Metrics did not improve; strategy was insufficient.
+  reflection:
+    stability: 2  # Radical structure change; switched from Classifier to Regressor.
+    quality: 2  # Fundamental conceptual error: applied a Regressor (GradientBoostingRegressor) to a Classification task.
+    smartness: 1  # catastrophic failure in domain understanding; metrics stagnated and approach was invalid.
+financial:
+  tot:
+    stability: 6  # Structure changed to include scaling and switched to GradientBoosting.
+    quality: 7  # Functional, but imports inside the script flow reduce readability.
+    smartness: 8  # Good choice switching to GradientBoosting which typically outperforms RF; metrics improved significantly (0.71 -> 0.80).
+  codeact:
+    stability: 9  # Minimal changes; simply concatenated data and retrained.
+    quality: 9  # Very clean, standard pandas/sklearn usage.
+    smartness: 5  # Basic strategy (train on all data); improved metrics (0.71 -> 0.80) but missed hyperparameter optimization opportunities.
+  improver:
+    stability: 6  # Added error handling and explicit metric tracking structures.
+    quality: 8  # Robust code with try/except blocks; explicit and well-chosen hyperparameters.
+    smartness: 10  # Excellent strategy; GradientBoosting with lower learning rate (0.05) and moderate depth yielded the best results (0.71 -> 0.88).
+  self_discovery:
+    stability: 4  # Introduced heavy preprocessing pipelines and switched to RandomForest with n_estimators=100.
+    quality: 7  # Code is technically correct but over-engineered with scalers for tree-based models.
+    smartness: 2  # Strategy failed to improve over baseline (metrics stuck at 0.71); scaling is generally unnecessary for Random Forest.
+  reflection:
+    stability: 2  # Radical architectural change; LightGBM, feature selection pipelines, and complex data wrapping.
+    quality: 6  # Over-complicated; difficult to debug; usage of 'fit_transform' logic is obscured by pipeline complexity.
+    smartness: 2  # Complete failure to improve results despite using heavy-duty tools (LightGBM); likely overfitting or poor parameter tuning.
+  fast:
+    stability: 7  # Logic separated into distinct training blocks; mostly preserves original flow.
+    quality: 5  # inefficient; re-reads datasets unnecessarily; contains debug print statements.
+    smartness: 5  # Same strategy as 'codeact' (concatenation) with similar results (0.71 -> 0.80), just implemented less cleanly.
+  slow:
+    stability: 6  # Added validation logic and switched to GradientBoosting.
+    quality: 7  # Clean logic, though validation split is defined but not utilized effectively in the final fit for the test set.
+    smartness: 9  # Strong strategy; GradientBoosting with depth 6 and subsampling achieved high accuracy (0.83).
+  standard:
+    stability: 5  # Added SMOTE and balancing logic.
+    quality: 7  # Standard implementation of handling imbalanced data.
+    smartness: 2  # Strategy failed (metrics 0.71); oversampling (SMOTE) was likely not the right approach for this specific distribution shift.
+  react:
+    stability: 10  # Code is virtually identical to the baseline.
+    quality: 5  # Syntactically correct but functionally useless for the task.
+    smartness: 1  # Completely ignored the new data and the request to improve performance; actually regressed in metrics.
+  plan_execute:
+    stability: 2  # Complete spaghetti code; mixes manual pandas manipulation with sklearn Pipelines and SMOTE.
+    quality: 3  # Major flaw: fits a new pipeline on test data during prediction (`fit_transform(X_test)`), causing data leakage and invalid results.
+    smartness: 1  # Fundamental methodological errors (test set leakage) and zero metric improvement.
+healthcare:
+  fast:
+    stability: 6  # Preserves structure but adds redundant logic blocks.
+    quality: 4  # Sloppy; reads `y_test_new` twice effectively overwriting it; inefficient file I/O.
+    smartness: 8  # Despite the messy code, the simple strategy of combining data and retraining worked well (0.73 -> 0.83).
+  self_discovery:
+    stability: 4  # Unnecessary complexity added with Feature Selection and Scaling.
+    quality: 7  # technically valid sklearn usage, but standardizing features for a Random Forest is redundant.
+    smartness: 2  # Added complexity yielded zero improvement; feature selection likely removed useful signals.
+  reflection:
+    stability: 7  # Good restructuring using Pipelines.
+    quality: 9  # Clean, Pythonic, and robust using ColumnTransformer and Pipelines.
+    smartness: 9  # Smart switch to GradientBoosting with tuned learning rate (0.01) improved performance significantly (0.80).
+  react:
+    stability: 7  # Standard refactoring to include RandomizedSearchCV.
+    quality: 8  # Good implementation of hyperparameter tuning, though search space is quite broad.
+    smartness: 9  # Leveraging XGBoost and randomized search successfully boosted metrics (0.80).
+  slow:
+    stability: 6  # Structure modified to include specific error handling.
+    quality: 8  # Clean, explicit code with good hyperparameter definitions for GradientBoosting.
+    smartness: 10  # Excellent strategy; GradientBoosting with specific tuning (learning_rate=0.05) achieved the best results (0.83 on new, 0.89 on old).
+  improver:
+    stability: 6  # Identical structure to 'slow'.
+    quality: 8  # Robust and explicit.
+    smartness: 10  # Consistent with 'slow', this strategy achieved the highest performance.
+  standard:
+    stability: 4  # risky use of `pd.get_dummies` on separate dataframes.
+    quality: 4  # Critical flaw: applying `get_dummies` separately to train/test splits can cause feature mismatch if categories are missing in one split.
+    smartness: 2  # Metrics stagnated; the data processing approach was flawed and likely introduced alignment issues.
+  tot:
+    stability: 8  # Clean introduction of ColumnTransformer.
+    quality: 9  # Very readable and robust code structure.
+    smartness: 8  # GradientBoosting strategy worked well (0.80), though slightly less effective than 'slow'/'improver'.
+  plan_execute:
+    stability: 2  # Messy script with lambda functions for LabelEncoding.
+    quality: 1  # Critical bug: `accuracy_score` compares `y_test_old` (size N) against predictions on concatenated test data (size N+M), which causes a crash or undefined behavior.
+    smartness: 1  # The code is functionally broken in the evaluation step; metrics stagnated.
+  codeact:
+    stability: 9  # Minimal changes; simple concatenation.
+    quality: 9  # Concise, efficient, and correct.
+    smartness: 8  # Simple strategy proved highly effective for this dataset (0.83), matching more complex approaches.
+nasa-FD002:
+  improver:
+    stability: 6  # Preserves structure but adds significant verbose block for printing shapes.
+    quality: 6  # Functional but noisy; excessive print statements clutter the code.
+    smartness: 9  # Simple and effective; combining data and retraining doubled the performance on the new distribution (0.26 -> 0.52).
+  codeact:
+    stability: 9  # Minimal changes; surgical insertion of data loading and concatenation.
+    quality: 9  # Excellent; concise, Pythonic, and readable.
+    smartness: 9  # Implements the winning strategy (concatenation) with the least overhead; highly effective.
+  plan_execute:
+    stability: 4  # Complex changes involving StratifiedKFold and separate scaling pipelines.
+    quality: 5  # Flawed logic; scaling old and new training data separately (`fit_transform` twice) removes the distributional shift info necessary for the model to adapt.
+    smartness: 1  # Strategy failed completely (metrics 0.265); separate scaling likely aligned features incorrectly, preventing the model from distinguishing/generalizing.
+  standard:
+    stability: 5  # Standard preprocessing additions.
+    quality: 2  # Critical Bug: `X_test` combines old+new (size N+M), but is evaluated against `y_test_new` (size M). This shape mismatch causes a crash.
+    smartness: 1  # Execution failure led to baseline metrics.
+  slow:
+    stability: 6  # Logic identical to 'improver'; redundant printing.
+    quality: 6  # Verbose and repetitive.
+    smartness: 9  # Effective strategy (0.52 metric) despite the code verbosity.
+  tot:
+    stability: 7  # Clean introduction of VotingClassifier.
+    quality: 8  # Good use of sklearn ensembles; code is logical.
+    smartness: 8  # Ensembling worked well (0.51), though results were slightly lower than a pure RandomForest trained on combined data.
+  fast:
+    stability: 6  # Same structure as 'improver' and 'slow'.
+    quality: 6  # Repetitive I/O and print statements.
+    smartness: 9  # Strong performance (0.52) from the concatenation strategy.
+  self_discovery:
+    stability: 5  # Added scaling for specific 'Setting' features.
+    quality: 7  # Code looks valid, but result is baseline.
+    smartness: 2  # Scaling the settings likely removed critical absolute-value signals required for this specific failure mode (FD002); strategy failed to improve metrics.
+  react:
+    stability: 7  # Switched to GradientBoosting with specific parameters.
+    quality: 9  # Clean implementation.
+    smartness: 9  # GradientBoosting is well-suited here; achieved strong results (0.51) comparable to RandomForest.
+  reflection:
+    stability: 4  # Heavy refactor using RobustScaler, OrdinalEncoder, and RandomizedSearchCV.
+    quality: 8  # Technically proficient use of Pipelines and ColumnTransformer.
+    smartness: 5  # Over-engineered; the complex pipeline performed worse (0.47) than simple concatenation strategies.
+nasa:
+  tot:
+    stability: 8  # Clean switch to GradientBoostingClassifier with minimal structural overhead.
+    quality: 9  # Robust, readable, and Pythonic implementation.
+    smartness: 8  # Gradient Boosting proved effective (0.668 on new data), though slightly outperformed by the Random Forest agents.
+  fast:
+    stability: 6  # Preserves structure but adds distinct, somewhat redundant blocks for "old model" training.
+    quality: 6  # Efficient strategy, but code is repetitive (re-training old model is unnecessary for the final goal).
+    smartness: 9  # Simple concatenation strategy yielded the highest performance improvement (0.678).
+  codeact:
+    stability: 8  # Minimal changes; introduced a validation split.
+    quality: 8  # Clean code, but using a validation split reduced the final training data size, resulting in slightly lower metrics (0.664) than the full concatenation agents.
+    smartness: 8  # Solid strategy, though full concatenation was empirically better here.
+  react:
+    stability: 7  # Switched dependencies to XGBoost.
+    quality: 8  # Good use of XGBoost with problem-specific hyperparameters (multi:softmax).
+    smartness: 8  # Achieved strong results (0.668) comparable to 'tot', showing XGBoost was a viable alternative.
+  reflection:
+    stability: 4  # Heavy structural changes with Pipelines and GridSearchCV.
+    quality: 8  # Technically proficient code, but the strategy failed.
+    smartness: 2  # Over-engineering with feature scaling and grid search resulted in zero improvement on the new distribution (metrics stuck at baseline 0.372).
+  slow:
+    stability: 6  # Identical structure to 'fast' and 'improver'.
+    quality: 6  # Verbose; repeats the old model training logic unnecessarily.
+    smartness: 9  # High performance (0.678) using the simple concatenation strategy.
+  self_discovery:
+    stability: 3  # Uses likely non-existent/hallucinated API (`pd.CategoricalEncoder`).
+    quality: 4  # Code is technically broken or relies on deprecated libraries; metrics stagnated at baseline.
+    smartness: 1  # Failed to implement a working solution; zero metric improvement.
+  standard:
+    stability: 5  # Hardcoded feature lists for scaling.
+    quality: 5  # Hardcoding features makes the code brittle; scaling seemingly destroyed the signal for the old distribution (0.79 -> 0.25).
+    smartness: 2  # Catastrophic regression on the old data distribution implies the preprocessing strategy was fundamentally flawed for this dataset.
+  plan_execute:
+    stability: 1  # Code is incomplete.
+    quality: 1  # Script ends after preprocessing and never instantiates or trains a model.
+    smartness: 1  # Complete failure to execute the task.
+  improver:
+    stability: 6  # Logic identical to 'fast'/'slow' but wrapped in try/except.
+    quality: 7  # Slightly better than 'fast' due to error handling, but still redundant in retraining the old model.
+    smartness: 9  # Achieved the top-tier metrics (0.678) with the simple concatenation strategy.
