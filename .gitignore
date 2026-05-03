@@ -38,4 +38,5 @@ initial_metrics_*.yaml
 
 # Claude
 CLAUDE.md
-.cache_langchain.db
+
+archive/

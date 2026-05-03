@@ -37,6 +37,7 @@ archive/                 Older experiment iterations (dev1-3, dev4_*)
 results/                 Per-run experiment YAML files (named by agent/dataset/llm)
 data/                    Committed result summaries, LLM evals, and human evaluation
 paper_figures*/          Figures used in the research paper, per domain
+docs/                    Architecture, codebase, and experiment documentation
 results.ipynb            Main analysis notebook: load results and generate plots
 ```
 
