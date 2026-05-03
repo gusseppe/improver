@@ -19,7 +19,7 @@ This dual-process approach optimizes the trade-off between computational efficie
 ```bash
 git clone <repo>
 cd improver
-uv venv --python 3.8.8
+uv venv --python 3.11.5
 uv pip install -e .
 jupyter notebook results.ipynb   # view results and plots
 ```
