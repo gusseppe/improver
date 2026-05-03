@@ -12,6 +12,8 @@ The architecture consists of two complementary systems:
 
 This dual-process approach optimizes the trade-off between computational efficiency and improvement quality, with theoretical guarantees for monotonic improvement under specified conditions.
 
+![Improver Agent Architecture](imgs/improver_agent.png)
+
 ## Quickstart
 
 ```bash
